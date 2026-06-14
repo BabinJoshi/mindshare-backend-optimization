@@ -1,0 +1,22 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+site/
+
+# Test / notebook artifacts
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Data / frozen Parquet substrate / checkpoints — never commit
+data/
+*.parquet
+
+# Local env
+.env

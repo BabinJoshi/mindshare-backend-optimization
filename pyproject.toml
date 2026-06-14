@@ -1,0 +1,30 @@
+[project]
+name = "mindshare-backend-optimization"
+version = "0.1.0"
+description = "Efficient Polars reimplementation of Mindshare's contribution-decay algorithm, validated against CockroachDB"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "polars>=1.18",
+    "pyarrow>=18.0",
+    "python-dotenv>=1.0",
+    # psycopg3 for reads: CockroachDB rejects connectorx's sslmode URI and ADBC's binary
+    # COPY TO, but speaks the standard wire protocol psycopg uses. A named (server-side)
+    # cursor keeps large reads memory-bounded.
+    "psycopg[binary]>=3.2",
+]
+
+[dependency-groups]
+dev = [
+    "jupyterlab>=4.3",
+]
+docs = [
+    "mkdocs-material>=9.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["mindshare_compute"]

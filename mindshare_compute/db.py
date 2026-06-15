@@ -1,4 +1,4 @@
-"""Memory-bounded CockroachDB reads and writes for contribution decay."""
+"""Memory-bounded PostgreSQL/CockroachDB reads and writes for contribution decay."""
 
 from __future__ import annotations
 
@@ -16,6 +16,8 @@ from psycopg import sql
 load_dotenv()
 
 Scope = Literal["project", "global"]
+Target = Literal["crdb", "pg"]
+WriteMethod = Literal["multirow", "copy"]
 TEST_SCORE_TABLES = {
     "project": "test_contribution_scores",
     "global": "test_global_contribution_scores",
@@ -37,7 +39,7 @@ COMMON_SCORE_COLUMNS = sql.SQL(
 )
 
 
-def connection_uri(target: str = "crdb") -> str:
+def connection_uri(target: Target = "crdb") -> str:
     """Read a database URI from .env without putting credentials in the notebook."""
     env_name = "MINDSHARE_DB_URI" if target == "crdb" else "MINDSHARE_PG_URI"
     uri = os.getenv(env_name)
@@ -65,13 +67,13 @@ def connect_with_ssl_fallback(uri: str) -> psycopg.Connection:
         raise
 
 
-def source_schema(target: str = "crdb") -> str:
+def source_schema(target: Target = "crdb") -> str:
     default = "mindshare_test" if target == "crdb" else "mindshare"
     return os.getenv(f"MINDSHARE_{target.upper()}_SOURCE_SCHEMA", default)
 
 
-def score_schema(target: str = "pg") -> str:
-    default = "mindshare_score_test" if target == "crdb" else "mindshare_score"
+def score_schema(target: Target = "pg") -> str:
+    default = "mindshare_score_test"
     return os.getenv(f"MINDSHARE_{target.upper()}_SCORE_SCHEMA", default)
 
 
@@ -79,7 +81,7 @@ def iter_decay_source(
     scope: Scope,
     project_keyword: str | None = None,
     *,
-    target: str = "crdb",
+    target: Target = "crdb",
     batch_size: int = 100_000,
 ) -> Iterator[pl.DataFrame]:
     """Yield ordered source rows using a server-side cursor to bound WSL memory."""
@@ -132,11 +134,10 @@ def iter_decay_source(
 
 
 class DecayResultWriter:
-    """Replace and write decay results to the CockroachDB test score tables.
+    """Replace and write decay results to PostgreSQL-wire test score tables.
 
-    The connection remains open across batches. Each batch is committed separately to
-    avoid creating one oversized CockroachDB transaction. A failed run can therefore
-    leave partial test results; rerunning it safely replaces them from the beginning.
+    The writer only creates, deletes, truncates, and inserts inside the configured score
+    schema. It never writes to the source ``mindshare`` schema.
     """
 
     def __init__(
@@ -144,6 +145,9 @@ class DecayResultWriter:
         scope: Scope,
         project_keyword: str | None = None,
         *,
+        target: Target = "crdb",
+        destination_schema: str | None = None,
+        write_method: WriteMethod = "multirow",
         insert_page_size: int = 4_000,
         use_copy: bool | None = None,
     ) -> None:
@@ -151,10 +155,17 @@ class DecayResultWriter:
             raise ValueError("project_keyword is required for project scope")
         if scope not in TEST_SCORE_TABLES:
             raise ValueError("scope must be 'project' or 'global'")
+        if target not in ("crdb", "pg"):
+            raise ValueError("target must be 'crdb' or 'pg'")
+        if write_method not in ("multirow", "copy"):
+            raise ValueError("write_method must be 'multirow' or 'copy'")
 
         self.scope = scope
         self.project_keyword = project_keyword
-        self.schema = score_schema("crdb")
+        self.target = target
+        self.schema = destination_schema or score_schema(target)
+        if self.schema == source_schema(target):
+            raise ValueError("destination schema must not be the read-only source schema")
         self.table = TEST_SCORE_TABLES[scope]
         self.connection: psycopg.Connection | None = None
         self.insert_columns: list[str] | None = None
@@ -163,9 +174,10 @@ class DecayResultWriter:
         if insert_page_size < 1:
             raise ValueError("insert_page_size must be at least 1")
         self.insert_page_size = insert_page_size
+        self.write_method = write_method
 
     def __enter__(self) -> "DecayResultWriter":
-        self.connection = connect_with_ssl_fallback(connection_uri("crdb"))
+        self.connection = connect_with_ssl_fallback(connection_uri(self.target))
         self._ensure_destination_table()
         return self
 
@@ -221,8 +233,8 @@ class DecayResultWriter:
             )
         self.connection.commit()
 
-        # Separate DDL transactions work across CockroachDB versions that restrict
-        # multiple schema changes in one explicit transaction.
+        # Separate DDL transactions also work across CockroachDB versions that
+        # restrict multiple schema changes in one explicit transaction.
         for index_name, index_columns in indexes:
             with self.connection.cursor() as cursor:
                 cursor.execute(
@@ -305,6 +317,9 @@ class DecayResultWriter:
 
         assert self.insert_columns is not None
 
+        if self.write_method == "copy":
+            return self._write_batch_copy(result)
+
         result_columns = set(result.columns)
         insert_prefix = sql.SQL("INSERT INTO {}.{} ({}) VALUES ").format(
             sql.Identifier(self.schema),
@@ -337,14 +352,49 @@ class DecayResultWriter:
         self.rows_written += result.height
         return result.height
 
+    def _write_batch_copy(self, result: pl.DataFrame) -> int:
+        """Stream a result batch with psycopg3 COPY FROM STDIN."""
+        assert self.connection is not None
+        assert self.insert_columns is not None
+
+        copy_statement = sql.SQL("COPY {}.{} ({}) FROM STDIN").format(
+            sql.Identifier(self.schema),
+            sql.Identifier(self.table),
+            sql.SQL(", ").join(map(sql.Identifier, self.insert_columns)),
+        )
+        result_columns = set(result.columns)
+
+        with self.connection.cursor() as cursor:
+            with cursor.copy(copy_statement) as copy:
+                for row in result.iter_rows(named=True):
+                    copy.write_row(
+                        tuple(
+                            row[column] if column in result_columns else None
+                            for column in self.insert_columns
+                        )
+                    )
+        self.connection.commit()
+        self.rows_written += result.height
+        return result.height
+
 
 def write_decay_results(
     scope: Scope,
     result_batches: Iterable[pl.DataFrame],
     project_keyword: str | None = None,
+    *,
+    target: Target = "crdb",
+    destination_schema: str | None = None,
+    write_method: WriteMethod = "multirow",
 ) -> int:
-    """Replace and write an iterable of computed result batches to CockroachDB."""
-    with DecayResultWriter(scope, project_keyword) as writer:
+    """Replace and write an iterable of computed result batches."""
+    with DecayResultWriter(
+        scope,
+        project_keyword,
+        target=target,
+        destination_schema=destination_schema,
+        write_method=write_method,
+    ) as writer:
         for result_batch in result_batches:
             writer.write_batch(result_batch)
         return writer.rows_written

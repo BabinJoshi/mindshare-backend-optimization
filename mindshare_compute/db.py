@@ -1,9 +1,11 @@
-"""Streaming CockroachDB/PostgreSQL reads for the decay notebook."""
+"""Memory-bounded CockroachDB reads and writes for contribution decay."""
 
 from __future__ import annotations
 
 import os
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
+from types import TracebackType
+from typing import Literal
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import polars as pl
@@ -12,6 +14,27 @@ from dotenv import load_dotenv
 from psycopg import sql
 
 load_dotenv()
+
+Scope = Literal["project", "global"]
+TEST_SCORE_TABLES = {
+    "project": "test_contribution_scores",
+    "global": "test_global_contribution_scores",
+}
+COMMON_SCORE_COLUMNS = sql.SQL(
+    """
+    reply_post_id TEXT NOT NULL,
+    replier_x_id TEXT NOT NULL,
+    original_post_id TEXT NOT NULL,
+    original_author_x_id TEXT NOT NULL,
+    post_created_at TIMESTAMPTZ NOT NULL,
+    replier_base_score DECIMAL NOT NULL,
+    effective_score DECIMAL NOT NULL,
+    contribution_score DECIMAL NOT NULL,
+    reply_number INT4 NOT NULL,
+    local_reply_count INT4 NOT NULL,
+    decay_type TEXT NOT NULL
+    """
+)
 
 
 def connection_uri(target: str = "crdb") -> str:
@@ -53,7 +76,7 @@ def score_schema(target: str = "pg") -> str:
 
 
 def iter_decay_source(
-    scope: str,
+    scope: Scope,
     project_keyword: str | None = None,
     *,
     target: str = "crdb",
@@ -108,25 +131,220 @@ def iter_decay_source(
                 yield pl.DataFrame(records, schema=columns, orient="row")
 
 
-def read_golden_scores(
-    scope: str, project_keyword: str | None = None, *, target: str = "pg"
-) -> pl.DataFrame:
-    """Read existing SQL-computed rows for parity checks on a manageable sample."""
-    table = "contribution_scores" if scope == "project" else "global_contribution_scores"
-    query = sql.SQL(
-        """
-        SELECT reply_post_id, effective_score, contribution_score,
-               reply_number, local_reply_count, decay_type
-        FROM {}.{}
-        """
-    ).format(sql.Identifier(score_schema(target)), sql.Identifier(table))
-    params = ()
-    if scope == "project":
-        query += sql.SQL(" WHERE project_keyword = %s")
-        params = (project_keyword,)
+class DecayResultWriter:
+    """Replace and write decay results to the CockroachDB test score tables.
 
-    with connect_with_ssl_fallback(connection_uri(target)) as conn:
-        with conn.cursor() as cursor:
-            cursor.execute(query, params)
-            columns = [item.name for item in cursor.description]
-            return pl.DataFrame(cursor.fetchall(), schema=columns, orient="row")
+    The connection remains open across batches. Each batch is committed separately to
+    avoid creating one oversized CockroachDB transaction. A failed run can therefore
+    leave partial test results; rerunning it safely replaces them from the beginning.
+    """
+
+    def __init__(
+        self,
+        scope: Scope,
+        project_keyword: str | None = None,
+        *,
+        insert_page_size: int = 4_000,
+        use_copy: bool | None = None,
+    ) -> None:
+        if scope == "project" and not project_keyword:
+            raise ValueError("project_keyword is required for project scope")
+        if scope not in TEST_SCORE_TABLES:
+            raise ValueError("scope must be 'project' or 'global'")
+
+        self.scope = scope
+        self.project_keyword = project_keyword
+        self.schema = score_schema("crdb")
+        self.table = TEST_SCORE_TABLES[scope]
+        self.connection: psycopg.Connection | None = None
+        self.insert_columns: list[str] | None = None
+        self.prepared = False
+        self.rows_written = 0
+        if insert_page_size < 1:
+            raise ValueError("insert_page_size must be at least 1")
+        self.insert_page_size = insert_page_size
+
+    def __enter__(self) -> "DecayResultWriter":
+        self.connection = connect_with_ssl_fallback(connection_uri("crdb"))
+        self._ensure_destination_table()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        if self.connection is not None:
+            try:
+                if exc_type is None and not self.prepared:
+                    # A successful run with no source rows should remove stale output.
+                    self._replace_existing_results()
+            finally:
+                self.connection.close()
+
+    def _ensure_destination_table(self) -> None:
+        """Create the test score schema, destination table, and lookup indexes."""
+        assert self.connection is not None
+        schema = sql.Identifier(self.schema)
+        table = sql.Identifier(self.table)
+        qualified_table = sql.SQL("{}.{}").format(schema, table)
+
+        if self.scope == "project":
+            columns = sql.SQL("project_keyword TEXT NOT NULL, ") + COMMON_SCORE_COLUMNS
+            indexes = [
+                ("idx_test_cs_keyword_author", ["project_keyword", "original_author_x_id"]),
+                ("idx_test_cs_keyword_replier", ["project_keyword", "replier_x_id"]),
+                ("idx_test_cs_original_post_id", ["original_post_id"]),
+                ("idx_test_cs_post_created", ["post_created_at"]),
+                ("idx_test_cs_reply_post_id", ["reply_post_id"]),
+            ]
+        else:
+            columns = COMMON_SCORE_COLUMNS
+            indexes = [
+                ("idx_test_gcs_original_author", ["original_author_x_id"]),
+                ("idx_test_gcs_original_post_id", ["original_post_id"]),
+                ("idx_test_gcs_post_created", ["post_created_at"]),
+                ("idx_test_gcs_replier", ["replier_x_id"]),
+                ("idx_test_gcs_reply_post_id", ["reply_post_id"]),
+            ]
+
+        with self.connection.cursor() as cursor:
+            cursor.execute(sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(schema))
+        self.connection.commit()
+
+        with self.connection.cursor() as cursor:
+            cursor.execute(
+                sql.SQL("CREATE TABLE IF NOT EXISTS {} ({})").format(
+                    qualified_table, columns
+                )
+            )
+        self.connection.commit()
+
+        # Separate DDL transactions work across CockroachDB versions that restrict
+        # multiple schema changes in one explicit transaction.
+        for index_name, index_columns in indexes:
+            with self.connection.cursor() as cursor:
+                cursor.execute(
+                    sql.SQL("CREATE INDEX IF NOT EXISTS {} ON {} ({})").format(
+                        sql.Identifier(index_name),
+                        qualified_table,
+                        sql.SQL(", ").join(map(sql.Identifier, index_columns)),
+                    )
+                )
+            self.connection.commit()
+
+    def _replace_existing_results(self) -> None:
+        """Clear only the destination rows this run will replace."""
+        assert self.connection is not None
+        with self.connection.cursor() as cursor:
+            table = sql.SQL("{}.{}").format(
+                sql.Identifier(self.schema), sql.Identifier(self.table)
+            )
+            if self.scope == "project":
+                cursor.execute(
+                    sql.SQL("DELETE FROM {} WHERE project_keyword = %s").format(table),
+                    (self.project_keyword,),
+                )
+            else:
+                cursor.execute(sql.SQL("TRUNCATE TABLE {}").format(table))
+        self.connection.commit()
+        self.prepared = True
+
+    def _configure_insert(self, result: pl.DataFrame) -> None:
+        """Use result columns that exist in the target and reject missing required ones."""
+        assert self.connection is not None
+        with self.connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT column_name, is_nullable, column_default, is_generated
+                FROM information_schema.columns
+                WHERE table_schema = %s AND table_name = %s
+                ORDER BY ordinal_position
+                """,
+                (self.schema, self.table),
+            )
+            table_columns = cursor.fetchall()
+
+        if not table_columns:
+            raise RuntimeError(f"Destination table {self.schema}.{self.table} does not exist")
+
+        result_columns = set(result.columns)
+        missing_required = [
+            name
+            for name, nullable, default, generated in table_columns
+            if nullable == "NO"
+            and default is None
+            and generated == "NEVER"
+            and name not in result_columns
+        ]
+        if missing_required:
+            missing = ", ".join(missing_required)
+            raise RuntimeError(
+                f"{self.schema}.{self.table} requires columns not produced by the "
+                f"algorithm: {missing}. If active_multipliers is required, construct "
+                "DecayComputer with include_active_multipliers=True."
+            )
+
+        self.insert_columns = [
+            name for name, _, _, generated in table_columns
+            if generated == "NEVER" and name in result_columns
+        ]
+
+    def write_batch(self, result: pl.DataFrame) -> int:
+        """Insert one Polars result batch and commit it to CockroachDB."""
+        if result.is_empty():
+            return 0
+        if self.connection is None:
+            raise RuntimeError("Use DecayResultWriter as a context manager")
+        if self.insert_columns is None:
+            self._configure_insert(result)
+        if not self.prepared:
+            # Validate destination compatibility before deleting existing test rows.
+            self._replace_existing_results()
+
+        assert self.insert_columns is not None
+
+        result_columns = set(result.columns)
+        insert_prefix = sql.SQL("INSERT INTO {}.{} ({}) VALUES ").format(
+            sql.Identifier(self.schema),
+            sql.Identifier(self.table),
+            sql.SQL(", ").join(map(sql.Identifier, self.insert_columns)),
+        )
+        row_placeholder = sql.SQL("({})").format(
+            sql.SQL(", ").join(sql.Placeholder() for _ in self.insert_columns)
+        )
+
+        # Multi-row INSERT is reliable on CockroachDB and substantially reduces
+        # network round trips compared with executemany. Pages stay small enough
+        # to avoid oversized SQL statements and transactions.
+        for page in result.iter_slices(self.insert_page_size):
+            parameters = [
+                value
+                for row in page.iter_rows(named=True)
+                for value in (
+                    row[column] if column in result_columns else None
+                    for column in self.insert_columns
+                )
+            ]
+            insert = insert_prefix + sql.SQL(", ").join(
+                row_placeholder for _ in range(page.height)
+            )
+            with self.connection.cursor() as cursor:
+                cursor.execute(insert, parameters)
+            self.connection.commit()
+
+        self.rows_written += result.height
+        return result.height
+
+
+def write_decay_results(
+    scope: Scope,
+    result_batches: Iterable[pl.DataFrame],
+    project_keyword: str | None = None,
+) -> int:
+    """Replace and write an iterable of computed result batches to CockroachDB."""
+    with DecayResultWriter(scope, project_keyword) as writer:
+        for result_batch in result_batches:
+            writer.write_batch(result_batch)
+        return writer.rows_written

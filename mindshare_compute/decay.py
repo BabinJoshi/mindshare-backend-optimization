@@ -16,22 +16,6 @@ import polars as pl
 
 Scope = Literal["project", "global"]
 
-OUTPUT_COLUMNS = [
-    "project_keyword",
-    "reply_post_id",
-    "original_post_id",
-    "replier_x_id",
-    "original_author_x_id",
-    "post_created_at",
-    "replier_base_score",
-    "effective_score",
-    "contribution_score",
-    "reply_number",
-    "local_reply_count",
-    "decay_type",
-]
-
-
 def _round2(value: float) -> float:
     """Match PostgreSQL NUMERIC rounding for the non-negative scores used here."""
     return floor(value * 100.0 + 0.5) / 100.0
@@ -159,50 +143,3 @@ class DecayComputer:
             results.append(result)
 
         return pl.DataFrame(results)
-
-
-def compare_scores(actual: pl.DataFrame, expected: pl.DataFrame) -> pl.DataFrame:
-    """Return rows whose Polars result differs from the SQL golden result."""
-    expected_columns = [
-        "reply_post_id",
-        "effective_score",
-        "contribution_score",
-        "reply_number",
-        "local_reply_count",
-        "decay_type",
-    ]
-    actual_marked = actual.with_columns(pl.lit(True).alias("_in_polars"))
-    expected_marked = expected.select(expected_columns).with_columns(
-        pl.lit(True).alias("_in_sql")
-    )
-    return (
-        actual_marked.join(
-            expected_marked,
-            on="reply_post_id",
-            how="full",
-            suffix="_sql",
-            coalesce=True,
-        )
-        .filter(
-            pl.col("_in_polars").is_null()
-            | pl.col("_in_sql").is_null()
-            | (
-                (
-                    pl.col("effective_score").cast(pl.Float64)
-                    - pl.col("effective_score_sql").cast(pl.Float64)
-                ).abs()
-                > 0.01
-            )
-            | (
-                (
-                    pl.col("contribution_score").cast(pl.Float64)
-                    - pl.col("contribution_score_sql").cast(pl.Float64)
-                ).abs()
-                > 0.01
-            )
-            | (pl.col("reply_number") != pl.col("reply_number_sql"))
-            | (pl.col("local_reply_count") != pl.col("local_reply_count_sql"))
-            | (pl.col("decay_type") != pl.col("decay_type_sql"))
-        )
-        .drop("_in_polars", "_in_sql")
-    )

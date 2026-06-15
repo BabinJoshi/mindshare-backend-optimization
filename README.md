@@ -5,31 +5,33 @@ memory-bounded **Polars** compute layer.
 
 ## `mindshare_compute` package
 
-Focused on one algorithm: **contribution decay**, with optional validation against the
-existing PostgreSQL-computed `contribution_scores` tables.
+Focused on one algorithm: **contribution decay**, computed in bounded local batches and
+written to CockroachDB test score tables.
 
 ```
 mindshare_compute/
   decay.py     the stateful decay algorithm (ordered Polars batch -> Polars batch)
-  db.py        read source rows / golden scores via psycopg3 (pg + crdb targets)
-notebooks/01_decay_prototype.ipynb   drive + validate against Postgres
+  db.py        stream source rows and write test score batches through psycopg3
+notebooks/01_decay_cockroach_test.ipynb   run and time project/global test writes
 ```
 
-The golden `contribution_scores` live in the **live Postgres** system; CockroachDB currently
-has only the base tables. The notebook computes from CockroachDB source rows and optionally
-compares the result with the Postgres golden output.
+Project runs replace only the selected project's rows in
+`mindshare_score_test.test_contribution_scores`. Global runs replace
+`mindshare_score_test.test_global_contribution_scores`. The writer creates the test schema,
+destination table, and lookup indexes when they do not already exist.
 
 ### Run
 
 ```bash
 uv sync --group dev
-cp .env.example .env    # set MINDSHARE_DB_URI; set MINDSHARE_PG_URI for validation
+cp .env.example .env    # set MINDSHARE_DB_URI
 
 # Run interactively:
-uv run jupyter lab notebooks/01_decay_prototype.ipynb
+uv run jupyter lab notebooks/01_decay_cockroach_test.ipynb
 ```
 
-Structural columns (`decay_type`, `reply_number`, `local_reply_count`) must match the PG
-output exactly; scores match within one cent (f64 vs PG `NUMERIC`; see `_round2` in
-`decay.py`). `active_multipliers` is omitted by default because its repeated array snapshots
-can dominate memory and output size. Enable it only when that SQL-compatible field is needed.
+`active_multipliers` is omitted because its repeated array snapshots can dominate memory
+and output size.
+
+Results are written directly to CockroachDB using bounded multi-row inserts. Parquet output
+is optional and should remain disabled when measuring the fastest compute-and-write path.

@@ -16,7 +16,11 @@ site/
 
 # Data / frozen Parquet substrate / checkpoints — never commit
 data/
+output/
 *.parquet
+
+# Run logs
+logs/
 
 # Local env
 .env

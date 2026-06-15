@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import Iterable, Iterator
 from types import TracebackType
@@ -14,6 +15,7 @@ from dotenv import load_dotenv
 from psycopg import sql
 
 load_dotenv()
+LOGGER = logging.getLogger(__name__)
 
 Scope = Literal["project", "global"]
 Target = Literal["crdb", "pg"]
@@ -46,7 +48,7 @@ def connection_uri(target: Target = "crdb") -> str:
     if target == "pg":
         uri = uri or os.getenv("POSTGRES_DATABASE_URL")
     if not uri:
-        raise RuntimeError(f"Set {env_name} in .env before running the notebook")
+        raise RuntimeError(f"Set {env_name} in .env before running the workflow")
     return uri
 
 
@@ -88,6 +90,14 @@ def iter_decay_source(
     if scope == "project" and not project_keyword:
         raise ValueError("project_keyword is required for project scope")
 
+    LOGGER.info(
+        "Opening source stream target=%s schema=%s scope=%s project=%s batch_size=%s",
+        target,
+        source_schema(target),
+        scope,
+        project_keyword,
+        batch_size,
+    )
     schema = sql.Identifier(source_schema(target))
     if scope == "project":
         query = sql.SQL(
@@ -149,7 +159,6 @@ class DecayResultWriter:
         destination_schema: str | None = None,
         write_method: WriteMethod = "multirow",
         insert_page_size: int = 4_000,
-        use_copy: bool | None = None,
     ) -> None:
         if scope == "project" and not project_keyword:
             raise ValueError("project_keyword is required for project scope")
@@ -177,6 +186,13 @@ class DecayResultWriter:
         self.write_method = write_method
 
     def __enter__(self) -> "DecayResultWriter":
+        LOGGER.info(
+            "Opening result writer target=%s schema=%s table=%s method=%s",
+            self.target,
+            self.schema,
+            self.table,
+            self.write_method,
+        )
         self.connection = connect_with_ssl_fallback(connection_uri(self.target))
         self._ensure_destination_table()
         return self
@@ -201,6 +217,7 @@ class DecayResultWriter:
         schema = sql.Identifier(self.schema)
         table = sql.Identifier(self.table)
         qualified_table = sql.SQL("{}.{}").format(schema, table)
+        LOGGER.info("Ensuring destination table exists: %s.%s", self.schema, self.table)
 
         if self.scope == "project":
             columns = sql.SQL("project_keyword TEXT NOT NULL, ") + COMMON_SCORE_COLUMNS
@@ -254,11 +271,18 @@ class DecayResultWriter:
                 sql.Identifier(self.schema), sql.Identifier(self.table)
             )
             if self.scope == "project":
+                LOGGER.info(
+                    "Deleting existing project rows from %s.%s project=%s",
+                    self.schema,
+                    self.table,
+                    self.project_keyword,
+                )
                 cursor.execute(
                     sql.SQL("DELETE FROM {} WHERE project_keyword = %s").format(table),
                     (self.project_keyword,),
                 )
             else:
+                LOGGER.info("Truncating global destination table %s.%s", self.schema, self.table)
                 cursor.execute(sql.SQL("TRUNCATE TABLE {}").format(table))
         self.connection.commit()
         self.prepared = True
@@ -304,7 +328,7 @@ class DecayResultWriter:
         ]
 
     def write_batch(self, result: pl.DataFrame) -> int:
-        """Insert one Polars result batch and commit it to CockroachDB."""
+        """Insert one Polars result batch and commit it to the destination database."""
         if result.is_empty():
             return 0
         if self.connection is None:
@@ -330,9 +354,8 @@ class DecayResultWriter:
             sql.SQL(", ").join(sql.Placeholder() for _ in self.insert_columns)
         )
 
-        # Multi-row INSERT is reliable on CockroachDB and substantially reduces
-        # network round trips compared with executemany. Pages stay small enough
-        # to avoid oversized SQL statements and transactions.
+        # Multi-row INSERT substantially reduces network round trips compared with
+        # executemany. Pages stay small enough to avoid oversized statements.
         for page in result.iter_slices(self.insert_page_size):
             parameters = [
                 value

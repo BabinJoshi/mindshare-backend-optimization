@@ -1,37 +1,484 @@
-# Mindshare Backend Optimization
+# Mindshare Decay Compute Pipeline
 
-Moving Mindshare's analytical algorithms out of PostgreSQL PL/pgSQL into a
-memory-bounded **Polars** compute layer.
+This project moves the contribution-decay algorithms out of PostgreSQL PL/pgSQL
+and computes them locally with Polars.
 
-## `mindshare_compute` package
+The production-style test workflow:
 
-Focused on one algorithm: **contribution decay**, computed in bounded local batches and
-written to PostgreSQL or CockroachDB test score tables.
+1. Reads base data from the PostgreSQL `mindshare` schema.
+2. Computes project or global decay in memory-bounded batches.
+3. Saves computed results as Parquet parts for manual inspection.
+4. Writes verified results only to the PostgreSQL `mindshare_score_test` schema.
 
+The workflow never writes to the read-only `mindshare` source schema.
+
+## Project Structure
+
+From `/home/babin411/Nucleus/mindshare-backend-optimization`, the current
+directory structure is:
+
+The tree omits `.git/`, `.venv/`, `__pycache__/`, and `.pytest_cache/` because
+they are generated tooling directories rather than project source.
+
+```text
+mindshare-backend-optimization/
+├── .agents/                 # Local agent/workspace configuration
+├── .codex/                  # Local Codex workspace configuration
+├── .env                     # Local credentials; ignored by Git
+├── .env.example
+├── .gitignore
+├── .python-version
+├── Mindshare_Backend/       # Existing PostgreSQL SQL definitions
+│   ├── Analytics/
+│   │   ├── functions/
+│   │   └── materialized views/
+│   ├── Mindshare/
+│   │   └── Tables/
+│   └── Mindshare_score/
+│       ├── Fuctions/
+│       └── Tables/
+├── mindshare_compute/
+│   ├── __init__.py
+│   ├── cli.py               # Shared CLI implementation and pipeline orchestration
+│   ├── db.py                # Memory-bounded database reads and result writes
+│   ├── decay.py             # Stateful contribution-decay algorithm
+│   └── logging_config.py    # Console and run-scoped file logging
+├── notebooks/
+│   ├── output/              # Existing notebook-generated result directories
+│   └── run_decay_and_write.ipynb
+├── run_decay_pipeline.py    # Direct executable wrapper around cli.main()
+├── pyproject.toml
+├── README.md
+└── uv.lock
 ```
-mindshare_compute/
-  decay.py     the stateful decay algorithm (ordered Polars batch -> Polars batch)
-  db.py        stream source rows and write test score batches through psycopg3
-notebooks/run_decay_and_write.ipynb   compute, inspect, then benchmark test writes
+
+The CLI may generate these ignored directories from the repository root:
+
+```text
+mindshare-backend-optimization/
+├── output/                  # CLI-generated Parquet parts and summary JSON files
+└── logs/                    # CLI-generated run logs
 ```
 
-Project runs replace only the selected project's rows in `test_contribution_scores`.
-Global runs replace `test_global_contribution_scores`. The writer creates destination
-tables and indexes when needed and refuses to use the configured source schema as its
-destination.
+`notebooks/output/` belongs to interactive notebook runs. The CLI commands below
+run from the repository root and therefore use root-level `output/` and `logs/`.
 
-### Run
+`run_decay_pipeline.py` is the repository's canonical executable. It delegates
+directly to the package implementation:
+
+```text
+run_decay_pipeline.py -> mindshare_compute.cli.main()
+```
+
+The optional installed `mindshare-decay` alias points to that same
+`mindshare_compute.cli.main()` function.
+
+## Tables
+
+Project scope reads:
+
+- `mindshare.mindshare_post`
+- `mindshare.mindshare_user`
+
+Project scope writes:
+
+- `mindshare_score_test.test_contribution_scores`
+
+Global scope reads:
+
+- `mindshare.user_post`
+- `mindshare.mindshare_user`
+
+Global scope writes:
+
+- `mindshare_score_test.test_global_contribution_scores`
+
+The destination schema, table, and indexes are created automatically when they do
+not exist. The writer refuses to use the configured source schema as its destination.
+
+## Setup
+
+Python 3.12 or newer and `uv` are required.
 
 ```bash
 uv sync --group dev
-cp .env.example .env    # set MINDSHARE_PG_URI
+cp .env.example .env
+```
 
-# Run interactively:
+Configure the PostgreSQL connection in `.env`:
+
+```env
+MINDSHARE_PG_URI=postgresql://user:password@host:5432/database?sslmode=require
+
+# Defaults shown. Override only when required.
+MINDSHARE_PG_SOURCE_SCHEMA=mindshare
+MINDSHARE_PG_SCORE_SCHEMA=mindshare_score_test
+```
+
+The database user needs:
+
+- `SELECT` permission on the required tables in `mindshare`.
+- `CREATE` and `USAGE` permission on `mindshare_score_test`.
+- Permission to create, delete, truncate, and insert into the test score tables.
+
+## CLI
+
+Run commands from the repository root:
+
+```bash
+cd /home/babin411/Nucleus/mindshare-backend-optimization
+uv run python ./run_decay_pipeline.py --help
+```
+
+With the existing `.venv`, the direct equivalent is:
+
+```bash
+./.venv/bin/python ./run_decay_pipeline.py --help
+```
+
+After `uv sync`, the optional installed alias is also equivalent:
+
+```bash
+uv run mindshare-decay --help
+```
+
+### CLI Modes
+
+The CLI provides four modes:
+
+| Mode | Reads PostgreSQL source tables | Computes algorithm | Reads/writes Parquet | Writes PostgreSQL results |
+|---|---:|---:|---:|---:|
+| `compute` | Yes | Yes | Writes | No |
+| `inspect` | No | No | Reads | No |
+| `write` | No | No | Reads | Yes, requires `--write` |
+| `run` | Yes | Yes | Writes and reads | Yes, requires `--write` |
+
+#### `compute`: Compute Results Without Database Writes
+
+Use `compute` to run the decay algorithm and save its output for manual
+verification.
+
+It will:
+
+- Read the required base tables from the read-only PostgreSQL `mindshare` schema.
+- Process source rows in bounded batches.
+- Compute project or global decay scores.
+- Write result batches as Parquet files.
+- Write `compute_summary.json` with separate database-read, algorithm, Parquet,
+  and total wall-clock timings.
+- Never create, delete, truncate, or insert database records.
+
+Project example:
+
+```bash
+uv run python ./run_decay_pipeline.py compute \
+  --scope project \
+  --project quipnetwork \
+  --output-dir output/quipnetwork_test
+```
+
+Global example:
+
+```bash
+uv run python ./run_decay_pipeline.py compute \
+  --scope global \
+  --output-dir output/global_test
+```
+
+If `--output-dir` is omitted, a unique directory containing the run ID is
+created under `output/`.
+
+#### `inspect`: Manually Verify Computed Parquet Results
+
+Use `inspect` after `compute` and before any database write.
+
+It will:
+
+- Read existing Parquet parts from `--output-dir`.
+- Print counts and score statistics grouped by `decay_type`.
+- Print an ordered verification preview.
+- Optionally filter the preview by replier or original author.
+- Never connect to or modify PostgreSQL.
+
+```bash
+uv run python ./run_decay_pipeline.py inspect \
+  --scope project \
+  --project quipnetwork \
+  --output-dir output/quipnetwork_test \
+  --replier 1000466366451933185 \
+  --limit 200
+```
+
+Useful options:
+
+```text
+--replier <x_id>          Show one replier's ordered results
+--original-author <x_id>  Show replies targeting one author
+--limit <rows>            Limit the verification preview
+```
+
+#### `write`: Write Previously Verified Results
+
+Use `write` only after manually verifying an existing Parquet result directory.
+
+It will:
+
+- Read result batches from `--output-dir`.
+- Create the destination schema, table, and indexes if they do not exist.
+- Refuse to use the read-only source schema as its destination.
+- Write only to PostgreSQL `mindshare_score_test`.
+- Write `write_summary.json` containing timing and row-count validation.
+- Require the explicit `--write` safety flag.
+
+Project scope:
+
+- Deletes only the selected project's existing rows.
+- Writes to `mindshare_score_test.test_contribution_scores`.
+
+Global scope:
+
+- Truncates the global test result table.
+- Writes to `mindshare_score_test.test_global_contribution_scores`.
+
+```bash
+uv run python ./run_decay_pipeline.py write \
+  --scope project \
+  --project quipnetwork \
+  --output-dir output/quipnetwork_test \
+  --write
+```
+
+Without `--write`, the command exits without modifying PostgreSQL.
+
+#### `run`: Complete End-to-End Execution
+
+Use `run` for an automated end-to-end test after the staged workflow has already
+been validated.
+
+It executes these modes sequentially:
+
+```text
+compute -> inspect -> write
+```
+
+It will:
+
+- Read source rows from PostgreSQL `mindshare`.
+- Compute and save Parquet result parts.
+- Print an inspection summary and preview.
+- Write results to PostgreSQL `mindshare_score_test`.
+- Validate the final destination row count.
+- Require the explicit `--write` safety flag before computation begins.
+
+```bash
+uv run python ./run_decay_pipeline.py run \
+  --scope project \
+  --project quipnetwork \
+  --output-dir output/quipnetwork_e2e \
+  --write
+```
+
+Use the staged `compute`, `inspect`, and `write` commands when human approval is
+required between computation and database writing. Use `run` when one automated
+end-to-end execution is desired.
+
+## Logging
+
+Every CLI invocation logs to both the terminal and a unique file:
+
+```text
+logs/
+└── 2026-06-15/
+    ├── 20260615T081500Z-a1b2c3/
+    │   └── pipeline.log
+    └── 20260615T093010Z-d4e5f6/
+        └── pipeline.log
+```
+
+- The day directory uses the UTC date.
+- Every invocation receives a unique run ID.
+- Separate runs on the same day never share a log file.
+- Compute and write summary JSON files include the run ID and log-file path.
+- `logs/` is excluded from Git.
+
+Set the console and file log level before the subcommand:
+
+```bash
+uv run python ./run_decay_pipeline.py --log-level DEBUG compute \
+  --scope project \
+  --project quipnetwork \
+  --output-dir output/quipnetwork_test
+```
+
+Use another log root when needed:
+
+```bash
+uv run python ./run_decay_pipeline.py --log-root /tmp/mindshare-logs inspect \
+  --scope project \
+  --project quipnetwork \
+  --output-dir output/quipnetwork_test
+```
+
+### Recommended staged project test
+
+First compute the algorithm and persist the results without database writes:
+
+```bash
+uv run python ./run_decay_pipeline.py compute \
+  --scope project \
+  --project quipnetwork \
+  --output-dir output/quipnetwork_test
+```
+
+This creates:
+
+```text
+output/quipnetwork_test/
+  part-00000.parquet
+  part-00001.parquet
+  ...
+  compute_summary.json
+```
+
+Inspect the complete result and optionally filter one replier:
+
+```bash
+uv run python ./run_decay_pipeline.py inspect \
+  --scope project \
+  --project quipnetwork \
+  --output-dir output/quipnetwork_test
+
+uv run python ./run_decay_pipeline.py inspect \
+  --scope project \
+  --project quipnetwork \
+  --output-dir output/quipnetwork_test \
+  --replier 1000466366451933185 \
+  --limit 200
+```
+
+After manually verifying the Parquet results, write them to PostgreSQL:
+
+```bash
+uv run python ./run_decay_pipeline.py write \
+  --scope project \
+  --project quipnetwork \
+  --output-dir output/quipnetwork_test \
+  --write
+```
+
+Before writing project results, the writer deletes only:
+
+```sql
+DELETE FROM mindshare_score_test.test_contribution_scores
+WHERE project_keyword = 'quipnetwork';
+```
+
+It then streams the verified Parquet parts into PostgreSQL using `COPY FROM STDIN`.
+
+### Full project end-to-end test
+
+The `run` command computes, prints an inspection summary, and writes the result:
+
+```bash
+uv run python ./run_decay_pipeline.py run \
+  --scope project \
+  --project quipnetwork \
+  --output-dir output/quipnetwork_e2e \
+  --write
+```
+
+`--write` is mandatory. Without it, the command exits before computation starts.
+
+When `--output-dir` is omitted for `compute` or `run`, the generated output
+directory includes the same run ID used by the log directory.
+
+### Global test
+
+Compute and inspect global results:
+
+```bash
+uv run python ./run_decay_pipeline.py compute \
+  --scope global \
+  --output-dir output/global_test
+
+uv run python ./run_decay_pipeline.py inspect \
+  --scope global \
+  --output-dir output/global_test
+```
+
+Write global results:
+
+```bash
+uv run python ./run_decay_pipeline.py write \
+  --scope global \
+  --output-dir output/global_test \
+  --write
+```
+
+Global writes truncate only:
+
+```sql
+TRUNCATE TABLE mindshare_score_test.test_global_contribution_scores;
+```
+
+## Performance Options
+
+Source rows and Parquet results are streamed in bounded batches:
+
+```bash
+--source-batch-size 100000
+--write-batch-size 100000
+```
+
+PostgreSQL writes default to streaming `COPY FROM STDIN`, which is normally fastest:
+
+```bash
+--write-method copy
+```
+
+For comparison, use bounded multi-row inserts:
+
+```bash
+--write-method multirow --insert-page-size 4000
+```
+
+Use `--include-active-multipliers` only when required. Repeated multiplier-array
+snapshots can significantly increase memory usage and Parquet size.
+
+If an output directory already contains Parquet parts, computation stops instead
+of overwriting them. To intentionally replace those parts:
+
+```bash
+--overwrite-output
+```
+
+## Timing Output
+
+`compute_summary.json` separates:
+
+- `database_read_seconds`
+- `algorithm_compute_seconds`
+- `parquet_write_seconds`
+- `compute_wall_seconds`
+
+`write_summary.json` records:
+
+- Destination schema and table
+- Write method
+- Rows written
+- Destination row count after writing
+- PostgreSQL write time
+- Total write wall time
+
+The CLI verifies that the number of rows written equals the destination row count
+after the operation.
+
+## Notebook
+
+The existing notebook remains available for interactive testing:
+
+```bash
 uv run jupyter lab notebooks/run_decay_and_write.ipynb
 ```
 
-`active_multipliers` is omitted because its repeated array snapshots can dominate memory
-and output size.
-
-The notebook reads PostgreSQL source tables from the read-only `mindshare` schema and writes
-only to `mindshare_score_test`. PostgreSQL write benchmarks use streaming `COPY FROM STDIN`.
+It keeps computation, manual inspection, and PostgreSQL writing in separate cells.

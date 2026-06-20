@@ -144,7 +144,7 @@ uv run mindshare-decay --help
 
 ### CLI Modes
 
-The CLI provides four modes:
+The CLI provides five modes:
 
 | Mode | Reads PostgreSQL source tables | Computes algorithm | Reads/writes Parquet | Writes PostgreSQL results |
 |---|---:|---:|---:|---:|
@@ -152,6 +152,7 @@ The CLI provides four modes:
 | `inspect` | No | No | Reads | No |
 | `write` | No | No | Reads | Yes, requires `--write` |
 | `run` | Yes | Yes | Writes and reads | Yes, requires `--write` |
+| `all-projects` | Yes | Yes | Writes and reads | Yes, requires `--write` |
 
 #### `compute`: Compute Results Without Database Writes
 
@@ -282,6 +283,66 @@ Use the staged `compute`, `inspect`, and `write` commands when human approval is
 required between computation and database writing. Use `run` when one automated
 end-to-end execution is desired.
 
+#### `all-projects`: Run Every Enabled Project
+
+Use `all-projects` to run project decay for every enabled project in:
+
+```sql
+mindshare.mindshare_project
+```
+
+The command discovers enabled projects with:
+
+```sql
+SELECT project_name
+FROM mindshare.mindshare_project
+WHERE status = true
+ORDER BY project_name;
+```
+
+For each enabled `project_name`, it runs the same per-project sequence used by
+`run`:
+
+```text
+compute -> inspect -> write
+```
+
+It will:
+
+- Read the enabled project list from `mindshare.mindshare_project`.
+- Skip projects where `status` is `false`.
+- Compute each enabled project separately.
+- Write each project's Parquet output under its own directory.
+- Delete and replace only that project's rows in
+  `mindshare_score_test.test_contribution_scores`.
+- Write `all_projects_summary.json` under the output root.
+- Require the explicit `--write` safety flag before project discovery starts.
+
+```bash
+uv run python ./run_decay_pipeline.py all-projects \
+  --output-root output/all_projects_e2e \
+  --write
+```
+
+The output layout is:
+
+```text
+output/all_projects_e2e/
+├── Acurast/
+│   ├── part-00000.parquet
+│   ├── compute_summary.json
+│   └── write_summary.json
+├── quipnetwork/
+│   ├── part-00000.parquet
+│   ├── ...
+│   ├── compute_summary.json
+│   └── write_summary.json
+└── all_projects_summary.json
+```
+
+When `--output-root` is omitted, the generated directory includes the same run
+ID used by the log directory.
+
 ## Logging
 
 Every CLI invocation logs to both the terminal and a unique file:
@@ -391,6 +452,20 @@ uv run python ./run_decay_pipeline.py run \
 
 When `--output-dir` is omitted for `compute` or `run`, the generated output
 directory includes the same run ID used by the log directory.
+
+### All Enabled Projects End-to-End Test
+
+Run every project whose `mindshare.mindshare_project.status` is `true`:
+
+```bash
+uv run python ./run_decay_pipeline.py all-projects \
+  --output-root output/all_projects_e2e \
+  --write
+```
+
+Each project is processed independently. A failure stops the command at the
+failed project. Rerun with `--overwrite-output` after fixing the issue if you
+want to recompute already-created Parquet parts.
 
 ### Global test
 

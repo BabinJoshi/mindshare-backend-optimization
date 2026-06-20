@@ -143,6 +143,29 @@ def iter_decay_source(
                 yield pl.DataFrame(records, schema=columns, orient="row")
 
 
+def list_enabled_projects(*, target: Target = "pg") -> list[str]:
+    """Return project names whose mindshare_project.status flag is true."""
+    schema_name = source_schema(target)
+    query = sql.SQL(
+        """
+        SELECT project_name
+        FROM {}.mindshare_project
+        WHERE status = true
+        ORDER BY project_name
+        """
+    ).format(sql.Identifier(schema_name))
+
+    LOGGER.info(
+        "Loading enabled projects target=%s schema=%s table=mindshare_project",
+        target,
+        schema_name,
+    )
+    with connect_with_ssl_fallback(connection_uri(target)) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(query)
+            return [row[0] for row in cursor.fetchall()]
+
+
 class DecayResultWriter:
     """Replace and write decay results to PostgreSQL-wire test score tables.
 

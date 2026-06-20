@@ -18,6 +18,7 @@ from .db import (
     connect_with_ssl_fallback,
     connection_uri,
     iter_decay_source,
+    list_enabled_projects,
     source_schema,
 )
 from .decay import DecayComputer
@@ -53,6 +54,11 @@ def _output_dir(args: argparse.Namespace, *, require_existing: bool = False) -> 
     if require_existing and not path.exists():
         raise FileNotFoundError(f"Output directory does not exist: {path}")
     return path
+
+
+def _project_output_dir(args: argparse.Namespace, project: str) -> Path:
+    root = Path(args.output_root)
+    return root / project
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -296,6 +302,92 @@ def run(args: argparse.Namespace) -> None:
     write_results(args)
 
 
+def _copy_common_project_args(args: argparse.Namespace, project: str) -> argparse.Namespace:
+    """Build per-project args for all-projects without mutating the outer command."""
+    return argparse.Namespace(
+        command="run",
+        log_level=args.log_level,
+        log_root=args.log_root,
+        run_id=args.run_id,
+        log_file=args.log_file,
+        scope="project",
+        project=project,
+        output_dir=str(_project_output_dir(args, project)),
+        source_batch_size=args.source_batch_size,
+        include_active_multipliers=args.include_active_multipliers,
+        overwrite_output=args.overwrite_output,
+        write=args.write,
+        write_method=args.write_method,
+        write_batch_size=args.write_batch_size,
+        insert_page_size=args.insert_page_size,
+        replier=args.replier,
+        original_author=args.original_author,
+        limit=args.limit,
+    )
+
+
+def run_all_projects(args: argparse.Namespace) -> None:
+    """Run project decay for every project enabled in mindshare_project."""
+    if not args.write:
+        raise RuntimeError(
+            "The all-projects command requires the explicit --write flag before any "
+            "project is computed."
+        )
+
+    projects = list_enabled_projects(target="pg")
+    if not projects:
+        raise RuntimeError("No enabled projects found in mindshare.mindshare_project")
+
+    output_root = Path(args.output_root)
+    output_root.mkdir(parents=True, exist_ok=True)
+    LOGGER.info(
+        "Starting all-projects run enabled_projects=%s output_root=%s",
+        len(projects),
+        output_root,
+    )
+
+    summaries: list[dict[str, Any]] = []
+    for index, project in enumerate(projects, start=1):
+        LOGGER.info(
+            "Starting project %s/%s project=%s",
+            index,
+            len(projects),
+            project,
+        )
+        project_args = _copy_common_project_args(args, project)
+        project_output_dir, compute_summary = compute(project_args)
+        project_args.output_dir = str(project_output_dir)
+        inspect_summary = inspect_results(project_args)
+        write_summary = write_results(project_args)
+        summaries.append(
+            {
+                "project": project,
+                "output_dir": str(project_output_dir),
+                "compute_summary": compute_summary,
+                "inspect_summary": inspect_summary,
+                "write_summary": write_summary,
+            }
+        )
+        LOGGER.info("Completed project %s/%s project=%s", index, len(projects), project)
+
+    all_projects_summary = {
+        **_run_metadata(args),
+        "stage": "all-projects",
+        "enabled_project_count": len(projects),
+        "projects": projects,
+        "output_root": str(output_root),
+        "total_rows_computed": sum(
+            item["compute_summary"]["rows_computed"] for item in summaries
+        ),
+        "total_rows_written": sum(
+            item["write_summary"]["rows_written"] for item in summaries
+        ),
+        "project_summaries": summaries,
+    }
+    _write_json(output_root / "all_projects_summary.json", all_projects_summary)
+    LOGGER.info("All-projects summary:\n%s", json.dumps(all_projects_summary, indent=2))
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
@@ -357,6 +449,35 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--original-author")
     run_parser.add_argument("--limit", type=_positive_int, default=20)
     run_parser.set_defaults(func=run)
+
+    all_projects_parser = subparsers.add_parser(
+        "all-projects",
+        help="Run project decay for every enabled project",
+    )
+    all_projects_parser.add_argument(
+        "--output-root",
+        default=None,
+        help="Root directory for per-project output directories",
+    )
+    all_projects_parser.add_argument("--source-batch-size", type=_positive_int, default=100_000)
+    all_projects_parser.add_argument("--include-active-multipliers", action="store_true")
+    all_projects_parser.add_argument("--overwrite-output", action="store_true")
+    all_projects_parser.add_argument(
+        "--write",
+        action="store_true",
+        help="Required to compute and write all enabled projects",
+    )
+    all_projects_parser.add_argument(
+        "--write-method",
+        choices=("copy", "multirow"),
+        default="copy",
+    )
+    all_projects_parser.add_argument("--write-batch-size", type=_positive_int, default=100_000)
+    all_projects_parser.add_argument("--insert-page-size", type=_positive_int, default=4_000)
+    all_projects_parser.add_argument("--replier")
+    all_projects_parser.add_argument("--original-author")
+    all_projects_parser.add_argument("--limit", type=_positive_int, default=20)
+    all_projects_parser.set_defaults(func=run_all_projects)
     return parser
 
 
@@ -366,6 +487,8 @@ def main() -> None:
     log_context = configure_logging(level=args.log_level, log_root=Path(args.log_root))
     args.run_id = log_context.run_id
     args.log_file = log_context.log_file
+    if getattr(args, "output_root", None) is None:
+        args.output_root = str(DEFAULT_OUTPUT_ROOT / f"all_projects_{args.run_id}")
     LOGGER.info(
         "Started run_id=%s command=%s log_file=%s",
         args.run_id,

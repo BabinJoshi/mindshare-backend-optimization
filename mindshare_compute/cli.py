@@ -348,6 +348,7 @@ def run_all_projects(args: argparse.Namespace) -> None:
     )
 
     summaries: list[dict[str, Any]] = []
+    failed_projects: list[dict[str, str]] = []
     for index, project in enumerate(projects, start=1):
         LOGGER.info(
             "Starting project %s/%s project=%s",
@@ -356,13 +357,32 @@ def run_all_projects(args: argparse.Namespace) -> None:
             project,
         )
         project_args = _copy_common_project_args(args, project)
-        project_output_dir, compute_summary = compute(project_args)
-        project_args.output_dir = str(project_output_dir)
-        inspect_summary = inspect_results(project_args)
-        write_summary = write_results(project_args)
+        try:
+            project_output_dir, compute_summary = compute(project_args)
+            project_args.output_dir = str(project_output_dir)
+            inspect_summary = inspect_results(project_args)
+            write_summary = write_results(project_args)
+        except Exception as exc:
+            LOGGER.exception(
+                "Failed project %s/%s project=%s; continuing with remaining projects",
+                index,
+                len(projects),
+                project,
+            )
+            failed_projects.append(
+                {
+                    "project": project,
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                    "output_dir": str(_project_output_dir(args, project)),
+                }
+            )
+            continue
+
         summaries.append(
             {
                 "project": project,
+                "status": "succeeded",
                 "output_dir": str(project_output_dir),
                 "compute_summary": compute_summary,
                 "inspect_summary": inspect_summary,
@@ -377,6 +397,10 @@ def run_all_projects(args: argparse.Namespace) -> None:
         "enabled_project_count": len(projects),
         "projects": projects,
         "output_root": str(output_root),
+        "succeeded_project_count": len(summaries),
+        "failed_project_count": len(failed_projects),
+        "succeeded_projects": [item["project"] for item in summaries],
+        "failed_projects": failed_projects,
         "total_rows_computed": sum(
             item["compute_summary"]["rows_computed"] for item in summaries
         ),
@@ -387,6 +411,12 @@ def run_all_projects(args: argparse.Namespace) -> None:
     }
     _write_json(output_root / "all_projects_summary.json", all_projects_summary)
     LOGGER.info("All-projects summary:\n%s", json.dumps(all_projects_summary, indent=2))
+    if failed_projects:
+        failed_names = ", ".join(item["project"] for item in failed_projects)
+        raise RuntimeError(
+            f"{len(failed_projects)} project(s) failed after processing all enabled "
+            f"projects: {failed_names}"
+        )
 
 
 def build_parser() -> argparse.ArgumentParser:

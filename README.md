@@ -327,7 +327,9 @@ It will:
 - Write each project's Parquet output under its own directory.
 - Delete and replace only that project's rows in
   `test_mindshare_score.test_contribution_scores`.
-- Write `all_projects_summary.json` under the output root.
+- Continue with later projects if one project fails.
+- Write `all_projects_summary.json` under the output root with succeeded and
+  failed project lists.
 - Require the explicit `--write` safety flag before project discovery starts.
 
 ```bash
@@ -475,9 +477,11 @@ uv run python ./run_decay_pipeline.py all-projects \
   --write
 ```
 
-Each project is processed independently. A failure stops the command at the
-failed project. Rerun with `--overwrite-output` after fixing the issue if you
-want to recompute already-created Parquet parts.
+Each project is processed independently. If one project fails, the command logs
+that failure, records it in `all_projects_summary.json`, and continues with the
+remaining projects. After all enabled projects have been attempted, the command
+exits with an error if any project failed. Rerun with `--overwrite-output` after
+fixing the issue if you want to recompute already-created Parquet parts.
 
 ### Global test
 

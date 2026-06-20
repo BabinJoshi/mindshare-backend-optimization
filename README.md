@@ -521,6 +521,26 @@ Source rows and Parquet results are streamed in bounded batches:
 --write-batch-size 100000
 ```
 
+If `database_read_seconds` dominates the compute summary, the bottleneck is the
+PostgreSQL source query rather than the Polars decay algorithm. The source query
+filters reply rows, joins each reply to its original post, and orders by
+`user_x_id, post_created_at`. Add the supporting indexes in:
+
+```text
+Mindshare_Backend/Mindshare_score/Indexes/decay_source_read_indexes.sql
+```
+
+Those indexes are especially important for large projects because the current
+query shape needs fast access to:
+
+- reply rows for one `project_keyword` in `user_x_id, post_created_at` order
+- original posts by `(project_keyword, post_id)`
+
+After creating the indexes, run the same project again and compare
+`database_read_seconds` in `compute_summary.json`. You can also try a larger
+batch size, such as `--source-batch-size 500000`, if WSL has enough memory.
+Larger batches reduce fetch round trips but increase peak memory.
+
 PostgreSQL writes default to streaming `COPY FROM STDIN`, which is normally fastest:
 
 ```bash

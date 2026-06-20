@@ -12,6 +12,16 @@ The production-style test workflow:
 
 The workflow never writes to the read-only `mindshare` source schema.
 
+## Database Documentation
+
+PostgreSQL object and performance documentation lives in:
+
+- [Database Object Dependencies](docs/database_object_dependencies.md)
+- [PostgreSQL Performance Improvements](docs/postgres_performance_improvements.md)
+
+The database docs reflect the current split: decay computation runs in Polars,
+while analytics materialized views and query functions remain in PostgreSQL.
+
 ## Project Structure
 
 From `/home/babin411/Nucleus/mindshare-backend-optimization`, the current

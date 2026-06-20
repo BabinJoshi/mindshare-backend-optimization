@@ -8,7 +8,7 @@ The production-style test workflow:
 1. Reads base data from the PostgreSQL `mindshare` schema.
 2. Computes project or global decay in memory-bounded batches.
 3. Saves computed results as Parquet parts for manual inspection.
-4. Writes verified results only to the PostgreSQL `mindshare_score_test` schema.
+4. Writes verified results only to the configured PostgreSQL score schema.
 
 The workflow never writes to the read-only `mindshare` source schema.
 
@@ -37,6 +37,8 @@ mindshare-backend-optimization/
 │   └── Mindshare_score/
 │       ├── Fuctions/
 │       └── Tables/
+├── config/
+│   └── mindshare.yaml       # Shared schema configuration for local pipelines
 ├── mindshare_compute/
 │   ├── __init__.py
 │   ├── cli.py               # Shared CLI implementation and pipeline orchestration
@@ -82,7 +84,7 @@ Project scope reads:
 
 Project scope writes:
 
-- `mindshare_score_test.test_contribution_scores`
+- `test_mindshare_score.test_contribution_scores`
 
 Global scope reads:
 
@@ -91,7 +93,7 @@ Global scope reads:
 
 Global scope writes:
 
-- `mindshare_score_test.test_global_contribution_scores`
+- `test_mindshare_score.test_global_contribution_scores`
 
 The destination schema, table, and indexes are created automatically when they do
 not exist. The writer refuses to use the configured source schema as its destination.
@@ -109,16 +111,26 @@ Configure the PostgreSQL connection in `.env`:
 
 ```env
 MINDSHARE_PG_URI=postgresql://user:password@host:5432/database?sslmode=require
-
-# Defaults shown. Override only when required.
-MINDSHARE_PG_SOURCE_SCHEMA=mindshare
-MINDSHARE_PG_SCORE_SCHEMA=mindshare_score_test
 ```
+
+Configure schemas in `config/mindshare.yaml`:
+
+```yaml
+postgres:
+  source_schema: mindshare
+  score_schema: test_mindshare_score
+
+cockroachdb:
+  source_schema: mindshare_test
+  score_schema: test_mindshare_score
+```
+
+Schema names are read only from this config file. They are not read from `.env`.
 
 The database user needs:
 
 - `SELECT` permission on the required tables in `mindshare`.
-- `CREATE` and `USAGE` permission on `mindshare_score_test`.
+- `CREATE` and `USAGE` permission on `test_mindshare_score`.
 - Permission to create, delete, truncate, and insert into the test score tables.
 
 ## CLI
@@ -227,19 +239,19 @@ It will:
 - Read result batches from `--output-dir`.
 - Create the destination schema, table, and indexes if they do not exist.
 - Refuse to use the read-only source schema as its destination.
-- Write only to PostgreSQL `mindshare_score_test`.
+- Write only to the configured PostgreSQL score schema.
 - Write `write_summary.json` containing timing and row-count validation.
 - Require the explicit `--write` safety flag.
 
 Project scope:
 
 - Deletes only the selected project's existing rows.
-- Writes to `mindshare_score_test.test_contribution_scores`.
+- Writes to `test_mindshare_score.test_contribution_scores`.
 
 Global scope:
 
 - Truncates the global test result table.
-- Writes to `mindshare_score_test.test_global_contribution_scores`.
+- Writes to `test_mindshare_score.test_global_contribution_scores`.
 
 ```bash
 uv run python ./run_decay_pipeline.py write \
@@ -267,7 +279,7 @@ It will:
 - Read source rows from PostgreSQL `mindshare`.
 - Compute and save Parquet result parts.
 - Print an inspection summary and preview.
-- Write results to PostgreSQL `mindshare_score_test`.
+- Write results to the configured PostgreSQL score schema.
 - Validate the final destination row count.
 - Require the explicit `--write` safety flag before computation begins.
 
@@ -314,7 +326,7 @@ It will:
 - Compute each enabled project separately.
 - Write each project's Parquet output under its own directory.
 - Delete and replace only that project's rows in
-  `mindshare_score_test.test_contribution_scores`.
+  `test_mindshare_score.test_contribution_scores`.
 - Write `all_projects_summary.json` under the output root.
 - Require the explicit `--write` safety flag before project discovery starts.
 
@@ -430,7 +442,7 @@ uv run python ./run_decay_pipeline.py write \
 Before writing project results, the writer deletes only:
 
 ```sql
-DELETE FROM mindshare_score_test.test_contribution_scores
+DELETE FROM test_mindshare_score.test_contribution_scores
 WHERE project_keyword = 'quipnetwork';
 ```
 
@@ -493,7 +505,7 @@ uv run python ./run_decay_pipeline.py write \
 Global writes truncate only:
 
 ```sql
-TRUNCATE TABLE mindshare_score_test.test_global_contribution_scores;
+TRUNCATE TABLE test_mindshare_score.test_global_contribution_scores;
 ```
 
 ## Performance Options
@@ -557,3 +569,13 @@ uv run jupyter lab notebooks/run_decay_and_write.ipynb
 ```
 
 It keeps computation, manual inspection, and PostgreSQL writing in separate cells.
+
+## Analytics Materialized Views
+
+Analytics engagement materialized views are intentionally left in PostgreSQL.
+Those views are relational joins over data already stored in Postgres, so keeping
+their creation and refresh near the data is usually faster than pulling millions
+of rows into Polars and writing them back.
+
+Use the existing SQL procedures under `Mindshare_Backend/Analytics/functions/`
+for Analytics view creation and refresh.

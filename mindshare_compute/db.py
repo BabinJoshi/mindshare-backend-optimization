@@ -14,6 +14,13 @@ import psycopg
 from dotenv import load_dotenv
 from psycopg import sql
 
+from mindshare_config import (
+    crdb_score_schema,
+    crdb_source_schema,
+    pg_score_schema,
+    pg_source_schema,
+)
+
 load_dotenv()
 LOGGER = logging.getLogger(__name__)
 
@@ -70,13 +77,11 @@ def connect_with_ssl_fallback(uri: str) -> psycopg.Connection:
 
 
 def source_schema(target: Target = "crdb") -> str:
-    default = "mindshare_test" if target == "crdb" else "mindshare"
-    return os.getenv(f"MINDSHARE_{target.upper()}_SOURCE_SCHEMA", default)
+    return crdb_source_schema() if target == "crdb" else pg_source_schema()
 
 
 def score_schema(target: Target = "pg") -> str:
-    default = "mindshare_score_test"
-    return os.getenv(f"MINDSHARE_{target.upper()}_SCORE_SCHEMA", default)
+    return crdb_score_schema() if target == "crdb" else pg_score_schema()
 
 
 def iter_decay_source(

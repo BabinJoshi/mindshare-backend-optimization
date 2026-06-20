@@ -1,0 +1,7 @@
+postgres:
+  source_schema: mindshare
+  score_schema: test_mindshare_score
+
+cockroachdb:
+  source_schema: mindshare_test
+  score_schema: test_mindshare_score

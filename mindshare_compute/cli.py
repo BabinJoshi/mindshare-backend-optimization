@@ -19,13 +19,13 @@ from .db import (
     connection_uri,
     iter_decay_source,
     list_enabled_projects,
+    score_schema,
     source_schema,
 )
 from .decay import DecayComputer
 from .logging_config import configure_logging
 
 DEFAULT_OUTPUT_ROOT = Path("output")
-POSTGRES_SCORE_SCHEMA = "mindshare_score_test"
 LOGGER = logging.getLogger("mindshare_compute.pipeline")
 
 
@@ -206,8 +206,9 @@ def inspect_results(args: argparse.Namespace) -> dict[str, Any]:
 
 def _destination_row_count(scope: str, project: str | None) -> int:
     table = TEST_SCORE_TABLES[scope]
+    destination_schema = score_schema("pg")
     query = sql.SQL("SELECT count(*) FROM {}.{}").format(
-        sql.Identifier(POSTGRES_SCORE_SCHEMA), sql.Identifier(table)
+        sql.Identifier(destination_schema), sql.Identifier(table)
     )
     params: tuple[Any, ...] = ()
     if scope == "project":
@@ -221,7 +222,7 @@ def _destination_row_count(scope: str, project: str | None) -> int:
 
 
 def write_results(args: argparse.Namespace) -> dict[str, Any]:
-    """Stream verified Parquet results into PostgreSQL mindshare_score_test."""
+    """Stream verified Parquet results into the configured PostgreSQL score schema."""
     if not args.write:
         raise RuntimeError(
             "Database writes are disabled. Add --write after verifying the Parquet output."
@@ -252,7 +253,7 @@ def write_results(args: argparse.Namespace) -> dict[str, Any]:
         args.scope,
         project,
         target="pg",
-        destination_schema=POSTGRES_SCORE_SCHEMA,
+        destination_schema=score_schema("pg"),
         write_method=args.write_method,
         insert_page_size=args.insert_page_size,
     ) as writer:
@@ -272,7 +273,7 @@ def write_results(args: argparse.Namespace) -> dict[str, Any]:
         **_run_metadata(args),
         "stage": "write",
         "write_target": "pg",
-        "destination_schema": POSTGRES_SCORE_SCHEMA,
+        "destination_schema": score_schema("pg"),
         "destination_table": TEST_SCORE_TABLES[args.scope],
         "scope": args.scope,
         "project_keyword": project,
@@ -392,7 +393,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
             "Compute decay from read-only PostgreSQL mindshare tables and optionally "
-            "write verified results to PostgreSQL mindshare_score_test."
+            f"write verified results to PostgreSQL {score_schema('pg')}."
         )
     )
     parser.add_argument(

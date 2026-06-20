@@ -714,3 +714,6 @@ CREATE INDEX ix_mv_engagement_pact_swap_root ON analytics.mv_engagement_pact_swa
 CREATE UNIQUE INDEX ix_mv_engagement_pact_swap_tweet ON analytics.mv_engagement_pact_swap USING btree (engaged_tweet_id);
 
 CREATE INDEX ix_mv_engagement_pact_swap_user ON analytics.mv_engagement_pact_swap USING btree (engaged_user_id);
+
+----- NOTES
+--- It took about 2 minute and 19 seconds to create a MATERIALIZED view for quipnetwork (which contains about 2.6 million records) 2

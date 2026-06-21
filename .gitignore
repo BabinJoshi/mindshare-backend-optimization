@@ -24,3 +24,5 @@ logs/
 
 # Local env
 .env
+node_modules/
+*.json

@@ -107,12 +107,33 @@ Recommendations:
 - If `REFRESH MATERIALIZED VIEW CONCURRENTLY` is required, PostgreSQL needs a
   valid unique index that covers every row.
 
-Important caveat:
+Important caveat (sharpened after inspecting the view definition):
 
-- The project view includes roots with no engagement and sets `engaged_tweet_id`
-  to `NULL`. PostgreSQL unique indexes allow multiple `NULL` values, so this can
-  still be valid, but confirm it behaves correctly for concurrent refresh and
-  downstream assumptions.
+- The project view's final `SELECT` is `engagements_with_scores UNION ALL
+  posts_with_no_engagement`. The no-engagement branch sets `engaged_tweet_id`,
+  `engaged_user_id`, and every engagement column to `NULL`. So **no single
+  column — and no obvious column combination — is unique across all rows.**
+  `engaged_tweet_id` is unique only among engagement rows; every no-engagement
+  row carries `NULL` there.
+- PostgreSQL allows the unique index to *exist* (multiple `NULL`s do not
+  conflict), which is why `ix_mv_engagement_<project>_tweet` is created without
+  error. But `REFRESH MATERIALIZED VIEW CONCURRENTLY` needs a unique index that
+  uniquely identifies **every** row, including the all-`NULL` ones. With more
+  than one no-engagement root, those rows are not distinguishable, so concurrent
+  refresh is not safe for this view.
+- This is consistent with the code: `analytics.refresh_engagement_views_all`
+  uses **plain** (non-concurrent) `REFRESH`. Treat the unique
+  `engaged_tweet_id` index as a data-quality guard for engagement rows, **not**
+  as a concurrent-refresh enabler.
+- If concurrent refresh of the project base view is ever required, add a column
+  that is unique per row (e.g. a generated surrogate key, or
+  `COALESCE(engaged_tweet_id, 'root:' || root_post_id)` materialized into a real
+  column) and build the unique index on that.
+
+By contrast, both **feature** views (`mv_engagement_features_<project>` and
+`mv_user_posts_engagement_features`) have one row per `root_post_id` and a
+genuine `UNIQUE (root_post_id)` index, so `REFRESH ... CONCURRENTLY` is valid
+for them — and `refresh_engagement_features_views_all` already uses it.
 
 ### `analytics.mv_user_posts_engagement`
 
@@ -208,7 +229,15 @@ FROM mindshare_score.contribution_scores cs
 ORDER BY cs.original_post_id, cs.replier_x_id, cs.post_created_at ASC
 ```
 
-Recommended index:
+There are actually **two distinct access shapes** for this pattern, and they
+want slightly different indexes. Verified against the function bodies:
+
+Shape A — **post-scoped** `DISTINCT ON`, no `project_keyword` predicate on the
+score table (scope comes from a join/`EXISTS` on `original_post_id`). Used by
+`get_account_level_metrics`, `get_post_level_metrics`,
+`get_single_post_smart_reach`, `get_v2_user_posts_analytics`, and the two global
+metric functions (`get_global_account_level_metrics`,
+`get_global_post_level_metrics`, which — note — read the **project** table):
 
 ```sql
 CREATE INDEX IF NOT EXISTS idx_cs_original_replier_created
@@ -219,7 +248,27 @@ ON mindshare_score.contribution_scores (
 );
 ```
 
-For global contribution scores:
+Shape B — **project-filtered** `DISTINCT ON`, with `cs.project_keyword = $n` in
+the predicate. Used by `get_mindshare_leaderboard`,
+`get_private_mindshare_leaderboard`, and `get_v2_analytics`. A keyword-leading
+composite lets the same index satisfy the filter and the `DISTINCT ON` ordering:
+
+```sql
+CREATE INDEX IF NOT EXISTS idx_cs_keyword_original_replier_created
+ON mindshare_score.contribution_scores (
+    project_keyword,
+    original_post_id,
+    replier_x_id,
+    post_created_at
+);
+```
+
+This supersedes the narrower existing `idx_cs_keyword_replier` and
+`idx_cs_keyword_author` for these hot leaderboard paths (keep those only if
+other queries depend on them).
+
+For global contribution scores (used by `get_all_users_analytics` and
+`get_user_posts_analytics`, both with the same `DISTINCT ON` shape):
 
 ```sql
 CREATE INDEX IF NOT EXISTS idx_gcs_original_replier_created
@@ -234,6 +283,7 @@ Expected benefit:
 
 - Faster earliest-reply lookup per original post/replier pair.
 - Lower sort pressure in leaderboard and analytics functions.
+- Shape B avoids a separate filter + sort by serving both from one index.
 
 ### Project Leaderboard Functions
 
@@ -351,6 +401,67 @@ If called frequently:
   scores are refreshed.
 - Keep the live function as a fallback or for ad hoc parameterized limits.
 
+## Reliability Issues Worth Fixing Alongside Performance
+
+These were found while verifying the function bodies. They are not pure
+performance items, but they cause silent wrong/empty results or block the
+migration, so fix them in the same pass.
+
+### `get_unique_reach_increase` builds the wrong view name for multi-word projects
+
+It builds `'analytics.mv_engagement_' || LOWER(projectname)` and injects with
+`%s` — **without** `REPLACE(projectname, ' ', '_')`. Every other function uses
+`LOWER(REPLACE(projectname, ' ', '_'))` with `%I`. For any project whose keyword
+contains a space (e.g. `Pact Swap`), this resolves to a non-existent view and
+the function errors or returns nothing. `get_user_level_unique_reach_increase_flag`
+calls it and inherits the bug. Align it with the canonical normalization:
+
+```sql
+-- inside get_unique_reach_increase, replace the table_name build with:
+view_name := 'mv_engagement_' || LOWER(REPLACE(projectname, ' ', '_'));
+-- and inject with %I against the analytics schema, matching the other functions.
+```
+
+### `active_multipliers` is `NOT NULL` in the production score tables
+
+`mindshare_score.contribution_scores` and `global_contribution_scores` both
+declare `active_multipliers _numeric NOT NULL`. The Polars writer omits that
+column by default and creates its own `test_*` tables without it. Before the
+pipeline can write the **production** tables you must either:
+
+- populate `active_multipliers` (run the pipeline with
+  `--include-active-multipliers`, accepting the higher memory/Parquet cost the
+  README warns about), or
+- drop the `NOT NULL` (or the column) on the production tables.
+
+Decide this deliberately as part of the cutover; it is not a runtime tunable.
+
+### Confirm the global metric functions' score-table choice
+
+`get_global_account_level_metrics` and `get_global_post_level_metrics` read the
+**project** `contribution_scores` table while every other input is the global
+`user_post`. If that is a bug, fixing it changes which index matters (the global
+composite index above instead of the project one). Resolve the intent before
+optimizing these two.
+
+## Materialized-View Build and Refresh Cost
+
+The `analytics.create_engagement_view` procedure `DROP ... CASCADE`s and
+recreates the view, then rebuilds three indexes. The source notes one project
+(`quipnetwork`, ~2.6M rows) took ~2m19s to create. Two practical levers:
+
+- **Prefer `REFRESH` over recreate for data updates** (already covered above) —
+  recreate only for definition changes.
+- **Refresh projects in parallel.** `refresh_engagement_features_views_all`
+  already commits per project; project base views are independent, so multiple
+  sessions can refresh different projects concurrently. The hard serialization
+  is only *within* one view (a plain `REFRESH` takes an exclusive lock on that
+  one view). Partition pruning on `mindshare_post` means each project's rebuild
+  only scans its own partition.
+- For the global feature pipeline, respect the ordering enforced by
+  `refresh_user_post_engagement_views`: base `mv_user_posts_engagement` first,
+  then `mv_user_posts_engagement_features`.
+
 ## Statistics and Maintenance
 
 After large writes, refreshes, or index creation:
@@ -413,11 +524,19 @@ Interpretation:
 
 1. Apply and validate source-read indexes for decay.
 2. Add missing `user_post(retweeted_post_id)` index if retweet joins are slow.
-3. Replace normal drop/recreate workflows with refresh workflows.
-4. Add unique indexes only where uniqueness is guaranteed and concurrent refresh
-   is needed.
-5. Add composite `original_post_id, replier_x_id, post_created_at` indexes for
-   contribution-score `DISTINCT ON` patterns.
+3. Replace normal drop/recreate workflows with refresh workflows; only the
+   feature views can use `CONCURRENTLY` (they have a real unique key), not the
+   project base engagement view.
+4. Add the contribution-score `DISTINCT ON` indexes — Shape A
+   (`original_post_id, replier_x_id, post_created_at`) for post-scoped functions
+   and the two global metric functions, Shape B
+   (`project_keyword, original_post_id, replier_x_id, post_created_at`) for the
+   leaderboards and `get_v2_analytics`; mirror Shape A onto
+   `global_contribution_scores`.
+5. Fix `get_unique_reach_increase`'s view-name normalization and confirm the
+   global metric functions' score-table choice (see Reliability Issues).
 6. Use `EXPLAIN (ANALYZE, BUFFERS)` on the slowest leaderboard/API calls.
-7. Consider materializing expensive all-user analytics only if the live function
+7. Resolve the `active_multipliers NOT NULL` question before pointing the Polars
+   pipeline at the production score tables.
+8. Consider materializing expensive all-user analytics only if the live function
    is called frequently enough to justify refresh cost.

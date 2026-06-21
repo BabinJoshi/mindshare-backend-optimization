@@ -61,6 +61,34 @@ mindshare.user_post + mindshare.mindshare_user
 Legacy SQL decay functions still exist in the SQL tree, but the current runtime
 path is the Polars pipeline.
 
+> **Verification note.** Every dependency in this document was cross-checked
+> against the SQL source and the `mindshare_compute` Polars code. Where reality
+> diverges from naming or earlier assumptions, the divergence is called out
+> inline with a **⚠️** marker. The most important ones are collected in
+> [Verified Corrections and Nuances](#verified-corrections-and-nuances).
+
+## Dynamic Object-Name Convention
+
+Most project-scoped functions and procedures build their target object name at
+runtime from the project keyword. The **canonical** normalization is:
+
+```text
+LOWER(REPLACE(project_keyword, ' ', '_'))
+```
+
+and the name is injected with the `%I` (quoted identifier) placeholder:
+
+- `analytics.mv_engagement_<normalized>`
+- `mindshare_score.mv_engagement_features_<normalized>`
+
+⚠️ **One function diverges:** `mindshare_score.get_unique_reach_increase` builds
+its view name as `'analytics.mv_engagement_' || LOWER(projectname)` and injects
+it with `%s` (not `%I`). It uses `LOWER()` **without** `REPLACE(' ', '_')`, so
+any project whose keyword contains a space resolves to the wrong (un-normalized)
+view name and the function fails or returns nothing. This also transitively
+affects `get_user_level_unique_reach_increase_flag`, which calls it. See
+[Verified Corrections and Nuances](#verified-corrections-and-nuances).
+
 ## Detailed Dependency Diagrams
 
 The diagrams below use logical object names for project-specific dynamic views:
@@ -280,6 +308,106 @@ flowchart TD
     refresh_user_posts_features --> user_posts_mv
     refresh_user_posts_features --> user_posts_features_mv
 ```
+
+## Contribution-Score Usage Matrix
+
+The single most error-prone dependency is *which* score table each function
+reads. This was verified function-by-function against the SQL:
+
+| Function | `contribution_scores` (project) | `global_contribution_scores` (global) | Neither |
+|---|:---:|:---:|:---:|
+| `get_mindshare_leaderboard` | ✅ (filters `project_keyword`) | | |
+| `get_private_mindshare_leaderboard` | ✅ (filters `project_keyword`) | | |
+| `get_v2_analytics` | ✅ (filters `project_keyword`) | | |
+| `get_account_level_metrics` | ✅ (scoped via join, no `project_keyword` predicate) | | |
+| `get_post_level_metrics` | ✅ (scoped via `EXISTS` on `original_post_id`) | | |
+| `get_single_post_smart_reach` | ✅ (filters `original_post_id`) | | |
+| `analytics.get_v2_user_posts_analytics` | ✅ (scoped via `EXISTS`) | | |
+| `get_global_account_level_metrics` | ✅ ⚠️ | | |
+| `get_global_post_level_metrics` | ✅ ⚠️ | | |
+| `analytics.get_all_users_analytics` | | ✅ | |
+| `analytics.get_user_posts_analytics` | | ✅ (filters `original_author_x_id`) | |
+| `get_post_engagement_ratios` | | | ✅ |
+| `get_account_and_keyword_unique_reach_ratio` | | | ✅ |
+| `get_unique_reach_increase` / `..._flag` | | | ✅ |
+| `get_global_post_engagement_ratios` | | | ✅ |
+| `get_global_unique_reach_increase` / `..._flag` | | | ✅ |
+| `get_user_post_engagement_clustering` | | | ✅ |
+| `get_user_engagement_quality` | | | ✅ |
+| `get_engagement_clustering` | | | ✅ |
+| `analytics.get_user_analytics` | | | ✅ |
+
+⚠️ **Correctness item to confirm:** `get_global_account_level_metrics` and
+`get_global_post_level_metrics` read the **project** `contribution_scores`
+table, not `global_contribution_scores`, even though every other input they use
+comes from the global `user_post` table. This is almost certainly worth a second
+look — either it is intentional (global smart-reach is meant to borrow
+project-decayed scores) or it is a copy-paste bug. The Polars migration must
+preserve whichever behavior is correct, so decide before switching the source of
+truth.
+
+## Verified Corrections and Nuances
+
+These were found while validating this document against the SQL and are worth
+recording because the file names and earlier mental models are misleading:
+
+1. **`get_user_posts_analytics` lives in a `create_*` file.** The function
+   `analytics.get_user_posts_analytics(p_user_id, startdate, enddate)` is
+   defined in `Analytics/functions/create_user_posts_analytics.sql`, and it is a
+   `LANGUAGE sql` (not PL/pgSQL) `STABLE` function. The file name implies a
+   procedure that creates a view; it does not.
+
+2. **`calculate_all_engagement_clustering_views.sql` defines
+   `create_all_engagement_clustering_views`.** The object name uses `create_`,
+   not `calculate_`. It iterates over **`mindshare.mindshare_post`** distinct
+   keywords (`GROUP BY LOWER(REPLACE(project_keyword,' ','_'))`), **not** over
+   `mindshare.mindshare_project`.
+
+3. **Refresh/create orchestration does not filter on project status.** Only the
+   Polars `all-projects` mode filters `mindshare_project.status = true`. The SQL
+   procedures (`run_create_engagement_views`, `refresh_engagement_views_all`,
+   `refresh_engagement_features_views_all`) iterate `mindshare_project` filtering
+   only `project_name IS NOT NULL AND project_name <> ''`. The legacy decay
+   `calculate_all_*` procedures and `create_all_engagement_clustering_views`
+   iterate distinct keywords in `mindshare_post`/`user_post` instead. So the set
+   of projects each path acts on can differ.
+
+4. **Refresh modes differ between base and feature views.**
+   - `analytics.refresh_engagement_views_all` runs a **non-concurrent**
+     `REFRESH MATERIALIZED VIEW` per project (readers block during refresh).
+   - `mindshare_score.refresh_engagement_features_views_all` runs
+     `REFRESH MATERIALIZED VIEW CONCURRENTLY`, **creates the feature view if it
+     is missing**, sets a per-project `statement_timeout = '10min'`, downgrades
+     per-project failures to a `WARNING`, and `COMMIT`s after each project.
+   - `mindshare_score.refresh_user_post_engagement_views` refreshes the two
+     global views **non-concurrently and in order**: base
+     `analytics.mv_user_posts_engagement` first, then
+     `mindshare_score.mv_user_posts_engagement_features`.
+
+5. **`get_unique_reach_increase` name-normalization bug** (see
+   [Dynamic Object-Name Convention](#dynamic-object-name-convention)): uses
+   `LOWER(projectname)` without `REPLACE(' ', '_')`, unlike every other
+   function.
+
+6. **`get_user_engagement_quality` reads `mindshare.nucleus_post`**, not
+   `user_post`, and caps each user at 50 posts (`ROW_NUMBER() ... rn <= 50`).
+   It is the only analytics function on the `nucleus_*` tables besides
+   `get_post_from_user_id`.
+
+7. **`active_multipliers` is `NOT NULL` in the production score tables.** Both
+   `contribution_scores` and `global_contribution_scores` declare
+   `active_multipliers _numeric NOT NULL`. The Polars pipeline omits this column
+   by default (`include_active_multipliers=False`) and writes to its own
+   `test_*` tables. Writing Polars output into the **production** tables would
+   therefore fail the `NOT NULL` constraint unless the column is populated or the
+   constraint is relaxed. This is a migration blocker to resolve deliberately.
+
+8. **Polars writes only to `test_*` tables.** The destination table names
+   (`test_contribution_scores`, `test_global_contribution_scores`) are
+   hardcoded in `mindshare_compute/db.py`; only the *schema* is configurable
+   (`config/mindshare.yaml -> postgres.score_schema`, currently
+   `test_mindshare_score`). There is no flag that makes the pipeline write the
+   production table names — that requires a code change.
 
 ## `mindshare` Schema
 
@@ -541,15 +669,38 @@ Indexes:
 These exist in the SQL tree but are superseded operationally by the Polars decay
 pipeline:
 
-- `calculate_decay_scores(project_keyword, reset_interval)`
-- `calculate_all_decay_scores(reset_interval)`
-- `calculate_global_decay_scores(reset_interval)`
-- `calculate_all_global_decay_scores(reset_interval)`
+- `calculate_decay_scores(p_project_keyword, p_reset_interval interval DEFAULT '30 days')`
+- `calculate_all_decay_scores(p_reset_interval interval DEFAULT '30 days')`
+- `calculate_global_decay_scores(p_reset_interval interval DEFAULT '30 days')`
+- `calculate_all_global_decay_scores(p_reset_interval interval DEFAULT '30 days')`
 
 They write to:
 
 - `mindshare_score.contribution_scores`
 - `mindshare_score.global_contribution_scores`
+
+Behavior (must be matched by the Polars implementation):
+
+- `calculate_all_decay_scores` `TRUNCATE`s `contribution_scores`, loops distinct
+  `project_keyword`s found in `mindshare.mindshare_post` (`is_reply = true`),
+  `PERFORM`s `calculate_decay_scores` per project, then creates the project
+  score indexes.
+- `calculate_all_global_decay_scores` `TRUNCATE`s `global_contribution_scores`,
+  runs a single global `calculate_global_decay_scores`, then creates the global
+  score indexes.
+- The per-row engine is a PL/pgSQL loop ordered by `user_x_id, post_created_at`.
+  Per replier it keeps a rolling 30-day window of penalty entries and computes
+  `effective_score = GREATEST(ROUND(base_score * Π(active multipliers), 2), 1%
+  floor)`. The multiplier for each reply is:
+  - `FIRST_REPLY = 1.0` when the window has no active entries,
+  - `LOCAL_DECAY = 0.5` when the replier already replied to this author inside
+    the window,
+  - otherwise the **scope-specific** branch.
+- ⚠️ **Project vs global differ only in that last branch.** Project applies
+  `GLOBAL_DECAY = 0.9` (a real penalty that feeds future decay); global applies
+  `NEW_AUTHOR = 1.0` (no penalty). This single difference is the whole reason
+  the two pipelines exist, and the Polars `DecayParams.for_scope` encodes it
+  identically (`mindshare_compute/decay.py`).
 
 #### Project Leaderboard and Metrics
 

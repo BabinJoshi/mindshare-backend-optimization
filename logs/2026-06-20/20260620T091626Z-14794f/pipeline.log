@@ -1,0 +1,2 @@
+2026-06-20T09:16:26Z | INFO | mindshare_compute.pipeline | Started run_id=20260620T091626Z-14794f command=run log_file=logs/2026-06-20/20260620T091626Z-14794f/pipeline.log
+2026-06-20T09:16:26Z | ERROR | mindshare_compute.pipeline | The end-to-end run command requires the explicit --write flag.

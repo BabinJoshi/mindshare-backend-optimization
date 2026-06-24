@@ -1,0 +1,118 @@
+2026-06-20T07:36:39Z | INFO | mindshare_compute.pipeline | Started run_id=20260620T073639Z-f1d4dc command=all-projects log_file=logs/2026-06-20/20260620T073639Z-f1d4dc/pipeline.log
+2026-06-20T07:36:39Z | INFO | mindshare_compute.db | Loading enabled projects target=pg schema=mindshare table=mindshare_project
+2026-06-20T07:36:40Z | INFO | mindshare_compute.pipeline | Starting all-projects run enabled_projects=6 output_root=output/all_projects_e2e
+2026-06-20T07:36:40Z | INFO | mindshare_compute.pipeline | Starting project 1/6 project=CNPYNetwork
+2026-06-20T07:36:40Z | ERROR | mindshare_compute.pipeline | Failed project 1/6 project=CNPYNetwork; continuing with remaining projects
+Traceback (most recent call last):
+  File "/home/babin411/Nucleus/mindshare-backend-optimization/mindshare_compute/cli.py", line 361, in run_all_projects
+    project_output_dir, compute_summary = compute(project_args)
+                                          ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/babin411/Nucleus/mindshare-backend-optimization/mindshare_compute/cli.py", line 81, in compute
+    raise RuntimeError(
+RuntimeError: output/all_projects_e2e/CNPYNetwork already contains Parquet parts. Use --overwrite-output or choose another --output-dir.
+2026-06-20T07:36:40Z | INFO | mindshare_compute.pipeline | Starting project 2/6 project=IronAllies_
+2026-06-20T07:36:40Z | ERROR | mindshare_compute.pipeline | Failed project 2/6 project=IronAllies_; continuing with remaining projects
+Traceback (most recent call last):
+  File "/home/babin411/Nucleus/mindshare-backend-optimization/mindshare_compute/cli.py", line 361, in run_all_projects
+    project_output_dir, compute_summary = compute(project_args)
+                                          ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/babin411/Nucleus/mindshare-backend-optimization/mindshare_compute/cli.py", line 81, in compute
+    raise RuntimeError(
+RuntimeError: output/all_projects_e2e/IronAllies_ already contains Parquet parts. Use --overwrite-output or choose another --output-dir.
+2026-06-20T07:36:40Z | INFO | mindshare_compute.pipeline | Starting project 3/6 project=Pact_Swap
+2026-06-20T07:36:40Z | ERROR | mindshare_compute.pipeline | Failed project 3/6 project=Pact_Swap; continuing with remaining projects
+Traceback (most recent call last):
+  File "/home/babin411/Nucleus/mindshare-backend-optimization/mindshare_compute/cli.py", line 361, in run_all_projects
+    project_output_dir, compute_summary = compute(project_args)
+                                          ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/babin411/Nucleus/mindshare-backend-optimization/mindshare_compute/cli.py", line 81, in compute
+    raise RuntimeError(
+RuntimeError: output/all_projects_e2e/Pact_Swap already contains Parquet parts. Use --overwrite-output or choose another --output-dir.
+2026-06-20T07:36:40Z | INFO | mindshare_compute.pipeline | Starting project 4/6 project=quipnetwork
+2026-06-20T07:36:40Z | ERROR | mindshare_compute.pipeline | Failed project 4/6 project=quipnetwork; continuing with remaining projects
+Traceback (most recent call last):
+  File "/home/babin411/Nucleus/mindshare-backend-optimization/mindshare_compute/cli.py", line 361, in run_all_projects
+    project_output_dir, compute_summary = compute(project_args)
+                                          ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/babin411/Nucleus/mindshare-backend-optimization/mindshare_compute/cli.py", line 81, in compute
+    raise RuntimeError(
+RuntimeError: output/all_projects_e2e/quipnetwork already contains Parquet parts. Use --overwrite-output or choose another --output-dir.
+2026-06-20T07:36:40Z | INFO | mindshare_compute.pipeline | Starting project 5/6 project=sleepagotchi
+2026-06-20T07:36:40Z | ERROR | mindshare_compute.pipeline | Failed project 5/6 project=sleepagotchi; continuing with remaining projects
+Traceback (most recent call last):
+  File "/home/babin411/Nucleus/mindshare-backend-optimization/mindshare_compute/cli.py", line 361, in run_all_projects
+    project_output_dir, compute_summary = compute(project_args)
+                                          ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/babin411/Nucleus/mindshare-backend-optimization/mindshare_compute/cli.py", line 81, in compute
+    raise RuntimeError(
+RuntimeError: output/all_projects_e2e/sleepagotchi already contains Parquet parts. Use --overwrite-output or choose another --output-dir.
+2026-06-20T07:36:40Z | INFO | mindshare_compute.pipeline | Starting project 6/6 project=TheARCTERMINAL
+2026-06-20T07:36:40Z | ERROR | mindshare_compute.pipeline | Failed project 6/6 project=TheARCTERMINAL; continuing with remaining projects
+Traceback (most recent call last):
+  File "/home/babin411/Nucleus/mindshare-backend-optimization/mindshare_compute/cli.py", line 361, in run_all_projects
+    project_output_dir, compute_summary = compute(project_args)
+                                          ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/babin411/Nucleus/mindshare-backend-optimization/mindshare_compute/cli.py", line 81, in compute
+    raise RuntimeError(
+RuntimeError: output/all_projects_e2e/TheARCTERMINAL already contains Parquet parts. Use --overwrite-output or choose another --output-dir.
+2026-06-20T07:36:40Z | INFO | mindshare_compute.pipeline | All-projects summary:
+{
+  "run_id": "20260620T073639Z-f1d4dc",
+  "log_file": "logs/2026-06-20/20260620T073639Z-f1d4dc/pipeline.log",
+  "stage": "all-projects",
+  "enabled_project_count": 6,
+  "projects": [
+    "CNPYNetwork",
+    "IronAllies_",
+    "Pact_Swap",
+    "quipnetwork",
+    "sleepagotchi",
+    "TheARCTERMINAL"
+  ],
+  "output_root": "output/all_projects_e2e",
+  "succeeded_project_count": 0,
+  "failed_project_count": 6,
+  "succeeded_projects": [],
+  "failed_projects": [
+    {
+      "project": "CNPYNetwork",
+      "error_type": "RuntimeError",
+      "error": "output/all_projects_e2e/CNPYNetwork already contains Parquet parts. Use --overwrite-output or choose another --output-dir.",
+      "output_dir": "output/all_projects_e2e/CNPYNetwork"
+    },
+    {
+      "project": "IronAllies_",
+      "error_type": "RuntimeError",
+      "error": "output/all_projects_e2e/IronAllies_ already contains Parquet parts. Use --overwrite-output or choose another --output-dir.",
+      "output_dir": "output/all_projects_e2e/IronAllies_"
+    },
+    {
+      "project": "Pact_Swap",
+      "error_type": "RuntimeError",
+      "error": "output/all_projects_e2e/Pact_Swap already contains Parquet parts. Use --overwrite-output or choose another --output-dir.",
+      "output_dir": "output/all_projects_e2e/Pact_Swap"
+    },
+    {
+      "project": "quipnetwork",
+      "error_type": "RuntimeError",
+      "error": "output/all_projects_e2e/quipnetwork already contains Parquet parts. Use --overwrite-output or choose another --output-dir.",
+      "output_dir": "output/all_projects_e2e/quipnetwork"
+    },
+    {
+      "project": "sleepagotchi",
+      "error_type": "RuntimeError",
+      "error": "output/all_projects_e2e/sleepagotchi already contains Parquet parts. Use --overwrite-output or choose another --output-dir.",
+      "output_dir": "output/all_projects_e2e/sleepagotchi"
+    },
+    {
+      "project": "TheARCTERMINAL",
+      "error_type": "RuntimeError",
+      "error": "output/all_projects_e2e/TheARCTERMINAL already contains Parquet parts. Use --overwrite-output or choose another --output-dir.",
+      "output_dir": "output/all_projects_e2e/TheARCTERMINAL"
+    }
+  ],
+  "total_rows_computed": 0,
+  "total_rows_written": 0,
+  "project_summaries": []
+}
+2026-06-20T07:36:40Z | ERROR | mindshare_compute.pipeline | 6 project(s) failed after processing all enabled projects: CNPYNetwork, IronAllies_, Pact_Swap, quipnetwork, sleepagotchi, TheARCTERMINAL

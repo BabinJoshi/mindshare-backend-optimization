@@ -1,0 +1,2 @@
+2026-06-20T09:17:00Z | INFO | mindshare_compute.pipeline | Started run_id=20260620T091700Z-7ac1d6 command=write log_file=logs/2026-06-20/20260620T091700Z-7ac1d6/pipeline.log
+2026-06-20T09:17:00Z | ERROR | mindshare_compute.pipeline | Database writes are disabled. Add --write after verifying the Parquet output.

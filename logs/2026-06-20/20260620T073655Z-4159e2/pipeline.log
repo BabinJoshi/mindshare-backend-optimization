@@ -1,0 +1,932 @@
+2026-06-20T07:36:55Z | INFO | mindshare_compute.pipeline | Started run_id=20260620T073655Z-4159e2 command=all-projects log_file=logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log
+2026-06-20T07:36:55Z | INFO | mindshare_compute.db | Loading enabled projects target=pg schema=mindshare table=mindshare_project
+2026-06-20T07:36:55Z | INFO | mindshare_compute.pipeline | Starting all-projects run enabled_projects=6 output_root=output/all_projects_e2e
+2026-06-20T07:36:55Z | INFO | mindshare_compute.pipeline | Starting project 1/6 project=CNPYNetwork
+2026-06-20T07:36:55Z | INFO | mindshare_compute.pipeline | Starting compute stage scope=project project=CNPYNetwork output_dir=output/all_projects_e2e/CNPYNetwork source_batch_size=100000
+2026-06-20T07:36:55Z | INFO | mindshare_compute.db | Opening source stream target=pg schema=mindshare scope=project project=CNPYNetwork batch_size=100000
+2026-06-20T07:37:07Z | INFO | mindshare_compute.pipeline | Computed part=00000 part_rows=78202 total_rows=78202
+2026-06-20T07:37:08Z | INFO | mindshare_compute.pipeline | Compute summary:
+{
+  "run_id": "20260620T073655Z-4159e2",
+  "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+  "stage": "compute",
+  "source_target": "pg",
+  "source_schema": "mindshare",
+  "scope": "project",
+  "project_keyword": "CNPYNetwork",
+  "output_dir": "output/all_projects_e2e/CNPYNetwork",
+  "rows_computed": 78202,
+  "parquet_parts": 1,
+  "database_read_seconds": 9.728898966975976,
+  "algorithm_compute_seconds": 0.7353891300153919,
+  "parquet_write_seconds": 0.04475157498382032,
+  "compute_wall_seconds": 10.509359904041048
+}
+2026-06-20T07:37:08Z | INFO | mindshare_compute.pipeline | Inspecting Parquet results scope=project project=CNPYNetwork output_dir=output/all_projects_e2e/CNPYNetwork parts=1
+2026-06-20T07:37:08Z | INFO | mindshare_compute.pipeline | Decay-type summary:
+shape: (3, 5)
+┌──────────────┬───────┬───────────┬────────────┬───────────┐
+│ decay_type   ┆ rows  ┆ min_score ┆ mean_score ┆ max_score │
+│ ---          ┆ ---   ┆ ---       ┆ ---        ┆ ---       │
+│ str          ┆ u32   ┆ f64       ┆ f64        ┆ f64       │
+╞══════════════╪═══════╪═══════════╪════════════╪═══════════╡
+│ FIRST_REPLY  ┆ 14301 ┆ 0.0       ┆ 101.428985 ┆ 2645.09   │
+│ GLOBAL_DECAY ┆ 28031 ┆ 0.0       ┆ 49.002976  ┆ 2380.58   │
+│ LOCAL_DECAY  ┆ 35870 ┆ 0.0       ┆ 11.156393  ┆ 1042.93   │
+└──────────────┴───────┴───────────┴────────────┴───────────┘
+2026-06-20T07:37:08Z | INFO | mindshare_compute.pipeline | Verification preview:
+shape: (20, 12)
+┌──────────┬──────────┬──────────┬──────────┬───┬──────────┬──────────┬─────────┬─────────┐
+│ project_ ┆ reply_po ┆ original ┆ replier_ ┆ … ┆ contribu ┆ reply_nu ┆ local_r ┆ decay_t │
+│ keyword  ┆ st_id    ┆ _post_id ┆ x_id     ┆   ┆ tion_sco ┆ mber     ┆ eply_co ┆ ype     │
+│ ---      ┆ ---      ┆ ---      ┆ ---      ┆   ┆ re       ┆ ---      ┆ unt     ┆ ---     │
+│ str      ┆ str      ┆ str      ┆ str      ┆   ┆ ---      ┆ i64      ┆ ---     ┆ str     │
+│          ┆          ┆          ┆          ┆   ┆ f64      ┆          ┆ i64     ┆         │
+╞══════════╪══════════╪══════════╪══════════╪═══╪══════════╪══════════╪═════════╪═════════╡
+│ CNPYNetw ┆ 20519057 ┆ 20519021 ┆          ┆ … ┆ 0.0      ┆ 1        ┆ 1       ┆ FIRST_R │
+│ ork      ┆ 15972018 ┆ 12293130 ┆          ┆   ┆          ┆          ┆         ┆ EPLY    │
+│          ┆ 222      ┆ 747      ┆          ┆   ┆          ┆          ┆         ┆         │
+│ CNPYNetw ┆ 20519058 ┆ 20519021 ┆          ┆ … ┆ 0.0      ┆ 2        ┆ 2       ┆ LOCAL_D │
+│ ork      ┆ 60268589 ┆ 12293130 ┆          ┆   ┆          ┆          ┆         ┆ ECAY    │
+│          ┆ 450      ┆ 747      ┆          ┆   ┆          ┆          ┆         ┆         │
+│ CNPYNetw ┆ 20519158 ┆ 20519030 ┆          ┆ … ┆ 0.0      ┆ 3        ┆ 1       ┆ GLOBAL_ │
+│ ork      ┆ 11380777 ┆ 16044044 ┆          ┆   ┆          ┆          ┆         ┆ DECAY   │
+│          ┆ 129      ┆ 400      ┆          ┆   ┆          ┆          ┆         ┆         │
+│ CNPYNetw ┆ 20519215 ┆ 20519021 ┆          ┆ … ┆ 0.0      ┆ 4        ┆ 3       ┆ LOCAL_D │
+│ ork      ┆ 93723764 ┆ 12293130 ┆          ┆   ┆          ┆          ┆         ┆ ECAY    │
+│          ┆ 745      ┆ 747      ┆          ┆   ┆          ┆          ┆         ┆         │
+│ CNPYNetw ┆ 20519298 ┆ 20519021 ┆          ┆ … ┆ 0.0      ┆ 5        ┆ 4       ┆ LOCAL_D │
+│ ork      ┆ 33983340 ┆ 12293130 ┆          ┆   ┆          ┆          ┆         ┆ ECAY    │
+│          ┆ 871      ┆ 747      ┆          ┆   ┆          ┆          ┆         ┆         │
+│ …        ┆ …        ┆ …        ┆ …        ┆ … ┆ …        ┆ …        ┆ …       ┆ …       │
+│ CNPYNetw ┆ 20605343 ┆ 20604898 ┆ 10010863 ┆ … ┆ 273.65   ┆ 3        ┆ 1       ┆ GLOBAL_ │
+│ ork      ┆ 27046521 ┆ 83853128 ┆ 9        ┆   ┆          ┆          ┆         ┆ DECAY   │
+│          ┆ 238      ┆ 047      ┆          ┆   ┆          ┆          ┆         ┆         │
+│ CNPYNetw ┆ 20616230 ┆ 20615883 ┆ 10010863 ┆ … ┆ 136.82   ┆ 4        ┆ 2       ┆ LOCAL_D │
+│ ork      ┆ 67659674 ┆ 95886018 ┆ 9        ┆   ┆          ┆          ┆         ┆ ECAY    │
+│          ┆ 048      ┆ 916      ┆          ┆   ┆          ┆          ┆         ┆         │
+│ CNPYNetw ┆ 20662951 ┆ 20661261 ┆ 10010863 ┆ … ┆ 123.15   ┆ 5        ┆ 1       ┆ GLOBAL_ │
+│ ork      ┆ 91682851 ┆ 74363771 ┆ 9        ┆   ┆          ┆          ┆         ┆ DECAY   │
+│          ┆ 185      ┆ 348      ┆          ┆   ┆          ┆          ┆         ┆         │
+│ CNPYNetw ┆ 20666138 ┆ 20657510 ┆ 10010863 ┆ … ┆ 110.83   ┆ 6        ┆ 1       ┆ GLOBAL_ │
+│ ork      ┆ 71759245 ┆ 40629330 ┆ 9        ┆   ┆          ┆          ┆         ┆ DECAY   │
+│          ┆ 676      ┆ 324      ┆          ┆   ┆          ┆          ┆         ┆         │
+│ CNPYNetw ┆ 20666248 ┆ 20664320 ┆ 10010863 ┆ … ┆ 99.75    ┆ 7        ┆ 1       ┆ GLOBAL_ │
+│ ork      ┆ 25968464 ┆ 09149522 ┆ 9        ┆   ┆          ┆          ┆         ┆ DECAY   │
+│          ┆ 347      ┆ 264      ┆          ┆   ┆          ┆          ┆         ┆         │
+└──────────┴──────────┴──────────┴──────────┴───┴──────────┴──────────┴─────────┴─────────┘
+2026-06-20T07:37:08Z | INFO | mindshare_compute.pipeline | Starting write stage scope=project project=CNPYNetwork output_dir=output/all_projects_e2e/CNPYNetwork method=copy
+2026-06-20T07:37:08Z | INFO | mindshare_compute.db | Opening result writer target=pg schema=test_mindshare_score table=test_contribution_scores method=copy
+2026-06-20T07:37:08Z | INFO | mindshare_compute.db | Ensuring destination table exists: test_mindshare_score.test_contribution_scores
+2026-06-20T07:37:09Z | INFO | mindshare_compute.db | Deleting existing project rows from test_mindshare_score.test_contribution_scores project=CNPYNetwork
+2026-06-20T07:37:12Z | INFO | mindshare_compute.pipeline | Wrote batch=00000 batch_rows=78202 total_rows=78202
+2026-06-20T07:37:12Z | INFO | mindshare_compute.pipeline | Write summary:
+{
+  "run_id": "20260620T073655Z-4159e2",
+  "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+  "stage": "write",
+  "write_target": "pg",
+  "destination_schema": "test_mindshare_score",
+  "destination_table": "test_contribution_scores",
+  "scope": "project",
+  "project_keyword": "CNPYNetwork",
+  "output_dir": "output/all_projects_e2e/CNPYNetwork",
+  "write_method": "copy",
+  "rows_written": 78202,
+  "destination_rows_after_write": 78202,
+  "postgres_write_seconds": 2.673392287979368,
+  "write_wall_seconds": 4.2126248920103535
+}
+2026-06-20T07:37:12Z | INFO | mindshare_compute.pipeline | Completed project 1/6 project=CNPYNetwork
+2026-06-20T07:37:12Z | INFO | mindshare_compute.pipeline | Starting project 2/6 project=IronAllies_
+2026-06-20T07:37:12Z | INFO | mindshare_compute.pipeline | Starting compute stage scope=project project=IronAllies_ output_dir=output/all_projects_e2e/IronAllies_ source_batch_size=100000
+2026-06-20T07:37:12Z | INFO | mindshare_compute.db | Opening source stream target=pg schema=mindshare scope=project project=IronAllies_ batch_size=100000
+2026-06-20T07:37:14Z | INFO | mindshare_compute.pipeline | Computed part=00000 part_rows=23556 total_rows=23556
+2026-06-20T07:37:14Z | INFO | mindshare_compute.pipeline | Compute summary:
+{
+  "run_id": "20260620T073655Z-4159e2",
+  "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+  "stage": "compute",
+  "source_target": "pg",
+  "source_schema": "mindshare",
+  "scope": "project",
+  "project_keyword": "IronAllies_",
+  "output_dir": "output/all_projects_e2e/IronAllies_",
+  "rows_computed": 23556,
+  "parquet_parts": 1,
+  "database_read_seconds": 2.2813327519688755,
+  "algorithm_compute_seconds": 0.21280866401502863,
+  "parquet_write_seconds": 0.015376436989754438,
+  "compute_wall_seconds": 2.50990616803756
+}
+2026-06-20T07:37:14Z | INFO | mindshare_compute.pipeline | Inspecting Parquet results scope=project project=IronAllies_ output_dir=output/all_projects_e2e/IronAllies_ parts=1
+2026-06-20T07:37:14Z | INFO | mindshare_compute.pipeline | Decay-type summary:
+shape: (3, 5)
+┌──────────────┬───────┬───────────┬────────────┬───────────┐
+│ decay_type   ┆ rows  ┆ min_score ┆ mean_score ┆ max_score │
+│ ---          ┆ ---   ┆ ---       ┆ ---        ┆ ---       │
+│ str          ┆ u32   ┆ f64       ┆ f64        ┆ f64       │
+╞══════════════╪═══════╪═══════════╪════════════╪═══════════╡
+│ FIRST_REPLY  ┆ 6379  ┆ 0.0       ┆ 164.074244 ┆ 2192.45   │
+│ GLOBAL_DECAY ┆ 4251  ┆ 0.0       ┆ 79.19817   ┆ 1553.14   │
+│ LOCAL_DECAY  ┆ 12926 ┆ 0.0       ┆ 25.725258  ┆ 930.37    │
+└──────────────┴───────┴───────────┴────────────┴───────────┘
+2026-06-20T07:37:14Z | INFO | mindshare_compute.pipeline | Verification preview:
+shape: (20, 12)
+┌──────────┬──────────┬──────────┬──────────┬───┬──────────┬──────────┬─────────┬─────────┐
+│ project_ ┆ reply_po ┆ original ┆ replier_ ┆ … ┆ contribu ┆ reply_nu ┆ local_r ┆ decay_t │
+│ keyword  ┆ st_id    ┆ _post_id ┆ x_id     ┆   ┆ tion_sco ┆ mber     ┆ eply_co ┆ ype     │
+│ ---      ┆ ---      ┆ ---      ┆ ---      ┆   ┆ re       ┆ ---      ┆ unt     ┆ ---     │
+│ str      ┆ str      ┆ str      ┆ str      ┆   ┆ ---      ┆ i64      ┆ ---     ┆ str     │
+│          ┆          ┆          ┆          ┆   ┆ f64      ┆          ┆ i64     ┆         │
+╞══════════╪══════════╪══════════╪══════════╪═══╪══════════╪══════════╪═════════╪═════════╡
+│ IronAlli ┆ 18738681 ┆ 18737342 ┆ 10004663 ┆ … ┆ 65.63    ┆ 1        ┆ 1       ┆ FIRST_R │
+│ es_      ┆ 17958680 ┆ 13603848 ┆ 66451933 ┆   ┆          ┆          ┆         ┆ EPLY    │
+│          ┆ 808      ┆ 277      ┆ 185      ┆   ┆          ┆          ┆         ┆         │
+│ IronAlli ┆ 19454004 ┆ 19448617 ┆ 10004663 ┆ … ┆ 65.63    ┆ 2        ┆ 1       ┆ FIRST_R │
+│ es_      ┆ 92260995 ┆ 10759661 ┆ 66451933 ┆   ┆          ┆          ┆         ┆ EPLY    │
+│          ┆ 161      ┆ 784      ┆ 185      ┆   ┆          ┆          ┆         ┆         │
+│ IronAlli ┆ 19466308 ┆ 19466218 ┆ 10004663 ┆ … ┆ 32.82    ┆ 3        ┆ 2       ┆ LOCAL_D │
+│ es_      ┆ 93315264 ┆ 88173641 ┆ 66451933 ┆   ┆          ┆          ┆         ┆ ECAY    │
+│          ┆ 684      ┆ 839      ┆ 185      ┆   ┆          ┆          ┆         ┆         │
+│ IronAlli ┆ 19597157 ┆ 19596849 ┆ 10004663 ┆ … ┆ 65.63    ┆ 4        ┆ 1       ┆ FIRST_R │
+│ es_      ┆ 75687827 ┆ 34593134 ┆ 66451933 ┆   ┆          ┆          ┆         ┆ EPLY    │
+│          ┆ 508      ┆ 650      ┆ 185      ┆   ┆          ┆          ┆         ┆         │
+│ IronAlli ┆ 19728085 ┆ 19727763 ┆ 10004663 ┆ … ┆ 65.63    ┆ 5        ┆ 1       ┆ FIRST_R │
+│ es_      ┆ 45751232 ┆ 90908158 ┆ 66451933 ┆   ┆          ┆          ┆         ┆ EPLY    │
+│          ┆ 839      ┆ 051      ┆ 185      ┆   ┆          ┆          ┆         ┆         │
+│ …        ┆ …        ┆ …        ┆ …        ┆ … ┆ …        ┆ …        ┆ …       ┆ …       │
+│ IronAlli ┆ 20164112 ┆ 20164027 ┆ 10004663 ┆ … ┆ 65.63    ┆ 16       ┆ 1       ┆ FIRST_R │
+│ es_      ┆ 50297569 ┆ 89614666 ┆ 66451933 ┆   ┆          ┆          ┆         ┆ EPLY    │
+│          ┆ 583      ┆ 131      ┆ 185      ┆   ┆          ┆          ┆         ┆         │
+│ IronAlli ┆ 20269002 ┆ 20267511 ┆ 10004663 ┆ … ┆ 32.82    ┆ 17       ┆ 2       ┆ LOCAL_D │
+│ es_      ┆ 16083800 ┆ 12041160 ┆ 66451933 ┆   ┆          ┆          ┆         ┆ ECAY    │
+│          ┆ 178      ┆ 805      ┆ 185      ┆   ┆          ┆          ┆         ┆         │
+│ IronAlli ┆ 20502987 ┆ 20502945 ┆ 10004663 ┆ … ┆ 65.63    ┆ 18       ┆ 1       ┆ FIRST_R │
+│ es_      ┆ 84194711 ┆ 57888200 ┆ 66451933 ┆   ┆          ┆          ┆         ┆ EPLY    │
+│          ┆ 749      ┆ 929      ┆ 185      ┆   ┆          ┆          ┆         ┆         │
+│ IronAlli ┆ 20546817 ┆ 20546042 ┆ 10004663 ┆ … ┆ 59.07    ┆ 19       ┆ 1       ┆ GLOBAL_ │
+│ es_      ┆ 37880314 ┆ 12529467 ┆ 66451933 ┆   ┆          ┆          ┆         ┆ DECAY   │
+│          ┆ 050      ┆ 744      ┆ 185      ┆   ┆          ┆          ┆         ┆         │
+│ IronAlli ┆ 20571785 ┆ 20571134 ┆ 10004663 ┆ … ┆ 53.16    ┆ 20       ┆ 1       ┆ GLOBAL_ │
+│ es_      ┆ 27607243 ┆ 29119287 ┆ 66451933 ┆   ┆          ┆          ┆         ┆ DECAY   │
+│          ┆ 190      ┆ 672      ┆ 185      ┆   ┆          ┆          ┆         ┆         │
+└──────────┴──────────┴──────────┴──────────┴───┴──────────┴──────────┴─────────┴─────────┘
+2026-06-20T07:37:14Z | INFO | mindshare_compute.pipeline | Starting write stage scope=project project=IronAllies_ output_dir=output/all_projects_e2e/IronAllies_ method=copy
+2026-06-20T07:37:14Z | INFO | mindshare_compute.db | Opening result writer target=pg schema=test_mindshare_score table=test_contribution_scores method=copy
+2026-06-20T07:37:15Z | INFO | mindshare_compute.db | Ensuring destination table exists: test_mindshare_score.test_contribution_scores
+2026-06-20T07:37:16Z | INFO | mindshare_compute.db | Deleting existing project rows from test_mindshare_score.test_contribution_scores project=IronAllies_
+2026-06-20T07:37:17Z | INFO | mindshare_compute.pipeline | Wrote batch=00000 batch_rows=23556 total_rows=23556
+2026-06-20T07:37:17Z | INFO | mindshare_compute.pipeline | Write summary:
+{
+  "run_id": "20260620T073655Z-4159e2",
+  "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+  "stage": "write",
+  "write_target": "pg",
+  "destination_schema": "test_mindshare_score",
+  "destination_table": "test_contribution_scores",
+  "scope": "project",
+  "project_keyword": "IronAllies_",
+  "output_dir": "output/all_projects_e2e/IronAllies_",
+  "write_method": "copy",
+  "rows_written": 23556,
+  "destination_rows_after_write": 23556,
+  "postgres_write_seconds": 1.4316880489932373,
+  "write_wall_seconds": 3.0204087820020504
+}
+2026-06-20T07:37:17Z | INFO | mindshare_compute.pipeline | Completed project 2/6 project=IronAllies_
+2026-06-20T07:37:17Z | INFO | mindshare_compute.pipeline | Starting project 3/6 project=Pact_Swap
+2026-06-20T07:37:17Z | INFO | mindshare_compute.pipeline | Starting compute stage scope=project project=Pact_Swap output_dir=output/all_projects_e2e/Pact_Swap source_batch_size=100000
+2026-06-20T07:37:17Z | INFO | mindshare_compute.db | Opening source stream target=pg schema=mindshare scope=project project=Pact_Swap batch_size=100000
+2026-06-20T07:37:34Z | INFO | mindshare_compute.pipeline | Computed part=00000 part_rows=100000 total_rows=100000
+2026-06-20T07:38:00Z | INFO | mindshare_compute.pipeline | Computed part=00001 part_rows=100000 total_rows=200000
+2026-06-20T07:38:10Z | INFO | mindshare_compute.pipeline | Computed part=00002 part_rows=41570 total_rows=241570
+2026-06-20T07:38:12Z | INFO | mindshare_compute.pipeline | Compute summary:
+{
+  "run_id": "20260620T073655Z-4159e2",
+  "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+  "stage": "compute",
+  "source_target": "pg",
+  "source_schema": "mindshare",
+  "scope": "project",
+  "project_keyword": "Pact_Swap",
+  "output_dir": "output/all_projects_e2e/Pact_Swap",
+  "rows_computed": 241570,
+  "parquet_parts": 3,
+  "database_read_seconds": 48.175540016032755,
+  "algorithm_compute_seconds": 2.5151647710590623,
+  "parquet_write_seconds": 0.09129594202386215,
+  "compute_wall_seconds": 50.782673508045264
+}
+2026-06-20T07:38:12Z | INFO | mindshare_compute.pipeline | Inspecting Parquet results scope=project project=Pact_Swap output_dir=output/all_projects_e2e/Pact_Swap parts=3
+2026-06-20T07:38:12Z | INFO | mindshare_compute.pipeline | Decay-type summary:
+shape: (3, 5)
+┌──────────────┬────────┬───────────┬────────────┬───────────┐
+│ decay_type   ┆ rows   ┆ min_score ┆ mean_score ┆ max_score │
+│ ---          ┆ ---    ┆ ---       ┆ ---        ┆ ---       │
+│ str          ┆ u32    ┆ f64       ┆ f64        ┆ f64       │
+╞══════════════╪════════╪═══════════╪════════════╪═══════════╡
+│ FIRST_REPLY  ┆ 38817  ┆ 0.0       ┆ 58.352533  ┆ 2645.09   │
+│ GLOBAL_DECAY ┆ 38563  ┆ 0.0       ┆ 44.245869  ┆ 1786.28   │
+│ LOCAL_DECAY  ┆ 164190 ┆ 0.0       ┆ 4.853055   ┆ 1163.58   │
+└──────────────┴────────┴───────────┴────────────┴───────────┘
+2026-06-20T07:38:12Z | INFO | mindshare_compute.pipeline | Verification preview:
+shape: (20, 12)
+┌──────────┬──────────┬──────────┬──────────┬───┬──────────┬──────────┬─────────┬─────────┐
+│ project_ ┆ reply_po ┆ original ┆ replier_ ┆ … ┆ contribu ┆ reply_nu ┆ local_r ┆ decay_t │
+│ keyword  ┆ st_id    ┆ _post_id ┆ x_id     ┆   ┆ tion_sco ┆ mber     ┆ eply_co ┆ ype     │
+│ ---      ┆ ---      ┆ ---      ┆ ---      ┆   ┆ re       ┆ ---      ┆ unt     ┆ ---     │
+│ str      ┆ str      ┆ str      ┆ str      ┆   ┆ ---      ┆ i64      ┆ ---     ┆ str     │
+│          ┆          ┆          ┆          ┆   ┆ f64      ┆          ┆ i64     ┆         │
+╞══════════╪══════════╪══════════╪══════════╪═══╪══════════╪══════════╪═════════╪═════════╡
+│ Pact_Swa ┆ 20090811 ┆ 20090765 ┆          ┆ … ┆ 0.0      ┆ 1        ┆ 1       ┆ FIRST_R │
+│ p        ┆ 17845147 ┆ 91641719 ┆          ┆   ┆          ┆          ┆         ┆ EPLY    │
+│          ┆ 814      ┆ 185      ┆          ┆   ┆          ┆          ┆         ┆         │
+│ Pact_Swa ┆ 20090811 ┆ 20088677 ┆          ┆ … ┆ 0.0      ┆ 2        ┆ 1       ┆ GLOBAL_ │
+│ p        ┆ 65760909 ┆ 34730506 ┆          ┆   ┆          ┆          ┆         ┆ DECAY   │
+│          ┆ 589      ┆ 381      ┆          ┆   ┆          ┆          ┆         ┆         │
+│ Pact_Swa ┆ 20094586 ┆ 20094577 ┆          ┆ … ┆ 0.0      ┆ 3        ┆ 1       ┆ GLOBAL_ │
+│ p        ┆ 77049417 ┆ 54017337 ┆          ┆   ┆          ┆          ┆         ┆ DECAY   │
+│          ┆ 826      ┆ 688      ┆          ┆   ┆          ┆          ┆         ┆         │
+│ Pact_Swa ┆ 20094612 ┆ 20094577 ┆          ┆ … ┆ 0.0      ┆ 4        ┆ 2       ┆ LOCAL_D │
+│ p        ┆ 22371172 ┆ 54017337 ┆          ┆   ┆          ┆          ┆         ┆ ECAY    │
+│          ┆ 520      ┆ 688      ┆          ┆   ┆          ┆          ┆         ┆         │
+│ Pact_Swa ┆ 20094632 ┆ 20094577 ┆          ┆ … ┆ 0.0      ┆ 5        ┆ 3       ┆ LOCAL_D │
+│ p        ┆ 00249790 ┆ 54017337 ┆          ┆   ┆          ┆          ┆         ┆ ECAY    │
+│          ┆ 889      ┆ 688      ┆          ┆   ┆          ┆          ┆         ┆         │
+│ …        ┆ …        ┆ …        ┆ …        ┆ … ┆ …        ┆ …        ┆ …       ┆ …       │
+│ Pact_Swa ┆ 19856222 ┆ 19854911 ┆ 10004663 ┆ … ┆ 65.63    ┆ 1        ┆ 1       ┆ FIRST_R │
+│ p        ┆ 59919192 ┆ 14770776 ┆ 66451933 ┆   ┆          ┆          ┆         ┆ EPLY    │
+│          ┆ 341      ┆ 447      ┆ 185      ┆   ┆          ┆          ┆         ┆         │
+│ Pact_Swa ┆ 19903775 ┆ 19903336 ┆ 10004663 ┆ … ┆ 59.07    ┆ 2        ┆ 1       ┆ GLOBAL_ │
+│ p        ┆ 00392968 ┆ 55470727 ┆ 66451933 ┆   ┆          ┆          ┆         ┆ DECAY   │
+│          ┆ 680      ┆ 361      ┆ 185      ┆   ┆          ┆          ┆         ┆         │
+│ Pact_Swa ┆ 19849925 ┆ 19842734 ┆ 10004876 ┆ … ┆ 0.0      ┆ 1        ┆ 1       ┆ FIRST_R │
+│ p        ┆ 30392621 ┆ 40661233 ┆ 96       ┆   ┆          ┆          ┆         ┆ EPLY    │
+│          ┆ 453      ┆ 759      ┆          ┆   ┆          ┆          ┆         ┆         │
+│ Pact_Swa ┆ 20056121 ┆ 20054134 ┆ 10004967 ┆ … ┆ 135.87   ┆ 1        ┆ 1       ┆ FIRST_R │
+│ p        ┆ 34030606 ┆ 17130103 ┆ 26954971 ┆   ┆          ┆          ┆         ┆ EPLY    │
+│          ┆ 838      ┆ 241      ┆ 136      ┆   ┆          ┆          ┆         ┆         │
+│ Pact_Swa ┆ 19895245 ┆ 19894304 ┆ 10006839 ┆ … ┆ 111.36   ┆ 1        ┆ 1       ┆ FIRST_R │
+│ p        ┆ 53434022 ┆ 46225330 ┆ 69925566 ┆   ┆          ┆          ┆         ┆ EPLY    │
+│          ┆ 199      ┆ 670      ┆ 465      ┆   ┆          ┆          ┆         ┆         │
+└──────────┴──────────┴──────────┴──────────┴───┴──────────┴──────────┴─────────┴─────────┘
+2026-06-20T07:38:12Z | INFO | mindshare_compute.pipeline | Starting write stage scope=project project=Pact_Swap output_dir=output/all_projects_e2e/Pact_Swap method=copy
+2026-06-20T07:38:12Z | INFO | mindshare_compute.db | Opening result writer target=pg schema=test_mindshare_score table=test_contribution_scores method=copy
+2026-06-20T07:38:12Z | INFO | mindshare_compute.db | Ensuring destination table exists: test_mindshare_score.test_contribution_scores
+2026-06-20T07:38:13Z | INFO | mindshare_compute.db | Deleting existing project rows from test_mindshare_score.test_contribution_scores project=Pact_Swap
+2026-06-20T07:38:16Z | INFO | mindshare_compute.pipeline | Wrote batch=00000 batch_rows=100000 total_rows=100000
+2026-06-20T07:38:18Z | INFO | mindshare_compute.pipeline | Wrote batch=00001 batch_rows=100000 total_rows=200000
+2026-06-20T07:38:19Z | INFO | mindshare_compute.pipeline | Wrote batch=00002 batch_rows=41570 total_rows=241570
+2026-06-20T07:38:19Z | INFO | mindshare_compute.pipeline | Write summary:
+{
+  "run_id": "20260620T073655Z-4159e2",
+  "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+  "stage": "write",
+  "write_target": "pg",
+  "destination_schema": "test_mindshare_score",
+  "destination_table": "test_contribution_scores",
+  "scope": "project",
+  "project_keyword": "Pact_Swap",
+  "output_dir": "output/all_projects_e2e/Pact_Swap",
+  "write_method": "copy",
+  "rows_written": 241570,
+  "destination_rows_after_write": 241570,
+  "postgres_write_seconds": 5.821544306003489,
+  "write_wall_seconds": 7.491174683964346
+}
+2026-06-20T07:38:19Z | INFO | mindshare_compute.pipeline | Completed project 3/6 project=Pact_Swap
+2026-06-20T07:38:19Z | INFO | mindshare_compute.pipeline | Starting project 4/6 project=quipnetwork
+2026-06-20T07:38:19Z | INFO | mindshare_compute.pipeline | Starting compute stage scope=project project=quipnetwork output_dir=output/all_projects_e2e/quipnetwork source_batch_size=100000
+2026-06-20T07:38:19Z | INFO | mindshare_compute.db | Opening source stream target=pg schema=mindshare scope=project project=quipnetwork batch_size=100000
+2026-06-20T07:38:33Z | INFO | mindshare_compute.pipeline | Computed part=00000 part_rows=100000 total_rows=100000
+2026-06-20T07:38:47Z | INFO | mindshare_compute.pipeline | Computed part=00001 part_rows=100000 total_rows=200000
+2026-06-20T07:39:04Z | INFO | mindshare_compute.pipeline | Computed part=00002 part_rows=100000 total_rows=300000
+2026-06-20T07:39:23Z | INFO | mindshare_compute.pipeline | Computed part=00003 part_rows=100000 total_rows=400000
+2026-06-20T07:39:47Z | INFO | mindshare_compute.pipeline | Computed part=00004 part_rows=100000 total_rows=500000
+2026-06-20T07:40:07Z | INFO | mindshare_compute.pipeline | Computed part=00005 part_rows=100000 total_rows=600000
+2026-06-20T07:40:22Z | INFO | mindshare_compute.pipeline | Computed part=00006 part_rows=100000 total_rows=700000
+2026-06-20T07:40:43Z | INFO | mindshare_compute.pipeline | Computed part=00007 part_rows=100000 total_rows=800000
+2026-06-20T07:41:06Z | INFO | mindshare_compute.pipeline | Computed part=00008 part_rows=100000 total_rows=900000
+2026-06-20T07:41:24Z | INFO | mindshare_compute.pipeline | Computed part=00009 part_rows=100000 total_rows=1000000
+2026-06-20T07:41:40Z | INFO | mindshare_compute.pipeline | Computed part=00010 part_rows=100000 total_rows=1100000
+2026-06-20T07:42:01Z | INFO | mindshare_compute.pipeline | Computed part=00011 part_rows=100000 total_rows=1200000
+2026-06-20T07:42:31Z | INFO | mindshare_compute.pipeline | Computed part=00012 part_rows=100000 total_rows=1300000
+2026-06-20T07:43:01Z | INFO | mindshare_compute.pipeline | Computed part=00013 part_rows=100000 total_rows=1400000
+2026-06-20T07:43:34Z | INFO | mindshare_compute.pipeline | Computed part=00014 part_rows=100000 total_rows=1500000
+2026-06-20T07:44:09Z | INFO | mindshare_compute.pipeline | Computed part=00015 part_rows=100000 total_rows=1600000
+2026-06-20T07:44:38Z | INFO | mindshare_compute.pipeline | Computed part=00016 part_rows=100000 total_rows=1700000
+2026-06-20T07:45:05Z | INFO | mindshare_compute.pipeline | Computed part=00017 part_rows=100000 total_rows=1800000
+2026-06-20T07:45:25Z | INFO | mindshare_compute.pipeline | Computed part=00018 part_rows=100000 total_rows=1900000
+2026-06-20T07:45:48Z | INFO | mindshare_compute.pipeline | Computed part=00019 part_rows=100000 total_rows=2000000
+2026-06-20T07:46:12Z | INFO | mindshare_compute.pipeline | Computed part=00020 part_rows=100000 total_rows=2100000
+2026-06-20T07:46:22Z | INFO | mindshare_compute.pipeline | Computed part=00021 part_rows=100000 total_rows=2200000
+2026-06-20T07:46:37Z | INFO | mindshare_compute.pipeline | Computed part=00022 part_rows=100000 total_rows=2300000
+2026-06-20T07:46:52Z | INFO | mindshare_compute.pipeline | Computed part=00023 part_rows=100000 total_rows=2400000
+2026-06-20T07:47:07Z | INFO | mindshare_compute.pipeline | Computed part=00024 part_rows=86812 total_rows=2486812
+2026-06-20T07:47:07Z | INFO | mindshare_compute.pipeline | Compute summary:
+{
+  "run_id": "20260620T073655Z-4159e2",
+  "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+  "stage": "compute",
+  "source_target": "pg",
+  "source_schema": "mindshare",
+  "scope": "project",
+  "project_keyword": "quipnetwork",
+  "output_dir": "output/all_projects_e2e/quipnetwork",
+  "rows_computed": 2486812,
+  "parquet_parts": 25,
+  "database_read_seconds": 479.10017535014777,
+  "algorithm_compute_seconds": 21.90080263983691,
+  "parquet_write_seconds": 1.0949343909160234,
+  "compute_wall_seconds": 502.10360960901016
+}
+2026-06-20T07:47:07Z | INFO | mindshare_compute.pipeline | Inspecting Parquet results scope=project project=quipnetwork output_dir=output/all_projects_e2e/quipnetwork parts=25
+2026-06-20T07:47:07Z | INFO | mindshare_compute.pipeline | Decay-type summary:
+shape: (3, 5)
+┌──────────────┬─────────┬───────────┬────────────┬───────────┐
+│ decay_type   ┆ rows    ┆ min_score ┆ mean_score ┆ max_score │
+│ ---          ┆ ---     ┆ ---       ┆ ---        ┆ ---       │
+│ str          ┆ u32     ┆ f64       ┆ f64        ┆ f64       │
+╞══════════════╪═════════╪═══════════╪════════════╪═══════════╡
+│ FIRST_REPLY  ┆ 41892   ┆ 0.0       ┆ 75.141457  ┆ 2645.09   │
+│ GLOBAL_DECAY ┆ 581711  ┆ 0.0       ┆ 14.040027  ┆ 2372.19   │
+│ LOCAL_DECAY  ┆ 1863209 ┆ 0.0       ┆ 2.836092   ┆ 1019.65   │
+└──────────────┴─────────┴───────────┴────────────┴───────────┘
+2026-06-20T07:47:08Z | INFO | mindshare_compute.pipeline | Verification preview:
+shape: (20, 12)
+┌─────────────────┬─────────────────┬─────────────────┬──────────────┬───┬─────────────────┬──────────────┬─────────────────┬──────────────┐
+│ project_keyword ┆ reply_post_id   ┆ original_post_i ┆ replier_x_id ┆ … ┆ contribution_sc ┆ reply_number ┆ local_reply_cou ┆ decay_type   │
+│ ---             ┆ ---             ┆ d               ┆ ---          ┆   ┆ ore             ┆ ---          ┆ nt              ┆ ---          │
+│ str             ┆ str             ┆ ---             ┆ str          ┆   ┆ ---             ┆ i64          ┆ ---             ┆ str          │
+│                 ┆                 ┆ str             ┆              ┆   ┆ f64             ┆              ┆ i64             ┆              │
+╞═════════════════╪═════════════════╪═════════════════╪══════════════╪═══╪═════════════════╪══════════════╪═════════════════╪══════════════╡
+│ quipnetwork     ┆ 204421085646106 ┆ 204420235429190 ┆              ┆ … ┆ 0.0             ┆ 1            ┆ 1               ┆ FIRST_REPLY  │
+│                 ┆ 2512            ┆ 4575            ┆              ┆   ┆                 ┆              ┆                 ┆              │
+│ quipnetwork     ┆ 204421124201371 ┆ 204336573061230 ┆              ┆ … ┆ 0.0             ┆ 2            ┆ 1               ┆ GLOBAL_DECAY │
+│                 ┆ 2840            ┆ 1879            ┆              ┆   ┆                 ┆              ┆                 ┆              │
+│ quipnetwork     ┆ 204421209335284 ┆ 204421050577942 ┆              ┆ … ┆ 0.0             ┆ 3            ┆ 1               ┆ GLOBAL_DECAY │
+│                 ┆ 9894            ┆ 5534            ┆              ┆   ┆                 ┆              ┆                 ┆              │
+│ quipnetwork     ┆ 204421245459147 ┆ 204421231560062 ┆              ┆ … ┆ 0.0             ┆ 4            ┆ 1               ┆ GLOBAL_DECAY │
+│                 ┆ 5833            ┆ 9869            ┆              ┆   ┆                 ┆              ┆                 ┆              │
+│ quipnetwork     ┆ 204421253833472 ┆ 204278341288555 ┆              ┆ … ┆ 0.0             ┆ 5            ┆ 1               ┆ GLOBAL_DECAY │
+│                 ┆ 4557            ┆ 7584            ┆              ┆   ┆                 ┆              ┆                 ┆              │
+│ …               ┆ …               ┆ …               ┆ …            ┆ … ┆ …               ┆ …            ┆ …               ┆ …            │
+│ quipnetwork     ┆ 204422446156262 ┆ 204421907704517 ┆              ┆ … ┆ 0.0             ┆ 16           ┆ 3               ┆ LOCAL_DECAY  │
+│                 ┆ 2152            ┆ 0329            ┆              ┆   ┆                 ┆              ┆                 ┆              │
+│ quipnetwork     ┆ 204422471276368 ┆ 204421924894452 ┆              ┆ … ┆ 0.0             ┆ 17           ┆ 1               ┆ GLOBAL_DECAY │
+│                 ┆ 3079            ┆ 5741            ┆              ┆   ┆                 ┆              ┆                 ┆              │
+│ quipnetwork     ┆ 204422507981987 ┆ 204421915958910 ┆              ┆ … ┆ 0.0             ┆ 18           ┆ 1               ┆ GLOBAL_DECAY │
+│                 ┆ 4630            ┆ 2031            ┆              ┆   ┆                 ┆              ┆                 ┆              │
+│ quipnetwork     ┆ 204422544887661 ┆ 204421897654965 ┆              ┆ … ┆ 0.0             ┆ 19           ┆ 1               ┆ GLOBAL_DECAY │
+│                 ┆ 7730            ┆ 0751            ┆              ┆   ┆                 ┆              ┆                 ┆              │
+│ quipnetwork     ┆ 204422580010344 ┆ 204422392451554 ┆              ┆ … ┆ 0.0             ┆ 20           ┆ 1               ┆ GLOBAL_DECAY │
+│                 ┆ 0390            ┆ 9395            ┆              ┆   ┆                 ┆              ┆                 ┆              │
+└─────────────────┴─────────────────┴─────────────────┴──────────────┴───┴─────────────────┴──────────────┴─────────────────┴──────────────┘
+2026-06-20T07:47:08Z | INFO | mindshare_compute.pipeline | Starting write stage scope=project project=quipnetwork output_dir=output/all_projects_e2e/quipnetwork method=copy
+2026-06-20T07:47:08Z | INFO | mindshare_compute.db | Opening result writer target=pg schema=test_mindshare_score table=test_contribution_scores method=copy
+2026-06-20T07:47:08Z | INFO | mindshare_compute.db | Ensuring destination table exists: test_mindshare_score.test_contribution_scores
+2026-06-20T07:47:09Z | INFO | mindshare_compute.db | Deleting existing project rows from test_mindshare_score.test_contribution_scores project=quipnetwork
+2026-06-20T07:47:12Z | INFO | mindshare_compute.pipeline | Wrote batch=00000 batch_rows=100000 total_rows=100000
+2026-06-20T07:47:15Z | INFO | mindshare_compute.pipeline | Wrote batch=00001 batch_rows=100000 total_rows=200000
+2026-06-20T07:47:17Z | INFO | mindshare_compute.pipeline | Wrote batch=00002 batch_rows=100000 total_rows=300000
+2026-06-20T07:47:19Z | INFO | mindshare_compute.pipeline | Wrote batch=00003 batch_rows=100000 total_rows=400000
+2026-06-20T07:47:22Z | INFO | mindshare_compute.pipeline | Wrote batch=00004 batch_rows=100000 total_rows=500000
+2026-06-20T07:47:24Z | INFO | mindshare_compute.pipeline | Wrote batch=00005 batch_rows=100000 total_rows=600000
+2026-06-20T07:47:26Z | INFO | mindshare_compute.pipeline | Wrote batch=00006 batch_rows=100000 total_rows=700000
+2026-06-20T07:47:29Z | INFO | mindshare_compute.pipeline | Wrote batch=00007 batch_rows=100000 total_rows=800000
+2026-06-20T07:47:31Z | INFO | mindshare_compute.pipeline | Wrote batch=00008 batch_rows=100000 total_rows=900000
+2026-06-20T07:47:33Z | INFO | mindshare_compute.pipeline | Wrote batch=00009 batch_rows=100000 total_rows=1000000
+2026-06-20T07:47:35Z | INFO | mindshare_compute.pipeline | Wrote batch=00010 batch_rows=100000 total_rows=1100000
+2026-06-20T07:47:37Z | INFO | mindshare_compute.pipeline | Wrote batch=00011 batch_rows=100000 total_rows=1200000
+2026-06-20T07:47:39Z | INFO | mindshare_compute.pipeline | Wrote batch=00012 batch_rows=100000 total_rows=1300000
+2026-06-20T07:47:41Z | INFO | mindshare_compute.pipeline | Wrote batch=00013 batch_rows=100000 total_rows=1400000
+2026-06-20T07:47:44Z | INFO | mindshare_compute.pipeline | Wrote batch=00014 batch_rows=100000 total_rows=1500000
+2026-06-20T07:47:46Z | INFO | mindshare_compute.pipeline | Wrote batch=00015 batch_rows=100000 total_rows=1600000
+2026-06-20T07:47:51Z | INFO | mindshare_compute.pipeline | Wrote batch=00016 batch_rows=100000 total_rows=1700000
+2026-06-20T07:47:54Z | INFO | mindshare_compute.pipeline | Wrote batch=00017 batch_rows=100000 total_rows=1800000
+2026-06-20T07:47:57Z | INFO | mindshare_compute.pipeline | Wrote batch=00018 batch_rows=100000 total_rows=1900000
+2026-06-20T07:48:02Z | INFO | mindshare_compute.pipeline | Wrote batch=00019 batch_rows=100000 total_rows=2000000
+2026-06-20T07:48:11Z | INFO | mindshare_compute.pipeline | Wrote batch=00020 batch_rows=100000 total_rows=2100000
+2026-06-20T07:48:17Z | INFO | mindshare_compute.pipeline | Wrote batch=00021 batch_rows=100000 total_rows=2200000
+2026-06-20T07:48:20Z | INFO | mindshare_compute.pipeline | Wrote batch=00022 batch_rows=100000 total_rows=2300000
+2026-06-20T07:48:24Z | INFO | mindshare_compute.pipeline | Wrote batch=00023 batch_rows=100000 total_rows=2400000
+2026-06-20T07:48:27Z | INFO | mindshare_compute.pipeline | Wrote batch=00024 batch_rows=86812 total_rows=2486812
+2026-06-20T07:48:28Z | INFO | mindshare_compute.pipeline | Write summary:
+{
+  "run_id": "20260620T073655Z-4159e2",
+  "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+  "stage": "write",
+  "write_target": "pg",
+  "destination_schema": "test_mindshare_score",
+  "destination_table": "test_contribution_scores",
+  "scope": "project",
+  "project_keyword": "quipnetwork",
+  "output_dir": "output/all_projects_e2e/quipnetwork",
+  "write_method": "copy",
+  "rows_written": 2486812,
+  "destination_rows_after_write": 2486812,
+  "postgres_write_seconds": 72.5722678299644,
+  "write_wall_seconds": 74.41131464502541
+}
+2026-06-20T07:48:28Z | INFO | mindshare_compute.pipeline | Completed project 4/6 project=quipnetwork
+2026-06-20T07:48:28Z | INFO | mindshare_compute.pipeline | Starting project 5/6 project=sleepagotchi
+2026-06-20T07:48:28Z | INFO | mindshare_compute.pipeline | Starting compute stage scope=project project=sleepagotchi output_dir=output/all_projects_e2e/sleepagotchi source_batch_size=100000
+2026-06-20T07:48:28Z | INFO | mindshare_compute.db | Opening source stream target=pg schema=mindshare scope=project project=sleepagotchi batch_size=100000
+2026-06-20T07:48:39Z | INFO | mindshare_compute.pipeline | Computed part=00000 part_rows=100000 total_rows=100000
+2026-06-20T07:49:00Z | INFO | mindshare_compute.pipeline | Computed part=00001 part_rows=100000 total_rows=200000
+2026-06-20T07:49:21Z | INFO | mindshare_compute.pipeline | Computed part=00002 part_rows=100000 total_rows=300000
+2026-06-20T07:49:39Z | INFO | mindshare_compute.pipeline | Computed part=00003 part_rows=100000 total_rows=400000
+2026-06-20T07:49:53Z | INFO | mindshare_compute.pipeline | Computed part=00004 part_rows=100000 total_rows=500000
+2026-06-20T07:50:10Z | INFO | mindshare_compute.pipeline | Computed part=00005 part_rows=100000 total_rows=600000
+2026-06-20T07:50:32Z | INFO | mindshare_compute.pipeline | Computed part=00006 part_rows=100000 total_rows=700000
+2026-06-20T07:50:35Z | INFO | mindshare_compute.pipeline | Computed part=00007 part_rows=11355 total_rows=711355
+2026-06-20T07:50:35Z | INFO | mindshare_compute.pipeline | Compute summary:
+{
+  "run_id": "20260620T073655Z-4159e2",
+  "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+  "stage": "compute",
+  "source_target": "pg",
+  "source_schema": "mindshare",
+  "scope": "project",
+  "project_keyword": "sleepagotchi",
+  "output_dir": "output/all_projects_e2e/sleepagotchi",
+  "rows_computed": 711355,
+  "parquet_parts": 8,
+  "database_read_seconds": 116.3038251339458,
+  "algorithm_compute_seconds": 5.9925575029919855,
+  "parquet_write_seconds": 0.2743536719935946,
+  "compute_wall_seconds": 122.57333075499628
+}
+2026-06-20T07:50:35Z | INFO | mindshare_compute.pipeline | Inspecting Parquet results scope=project project=sleepagotchi output_dir=output/all_projects_e2e/sleepagotchi parts=8
+2026-06-20T07:50:35Z | INFO | mindshare_compute.pipeline | Decay-type summary:
+shape: (3, 5)
+┌──────────────┬────────┬───────────┬────────────┬───────────┐
+│ decay_type   ┆ rows   ┆ min_score ┆ mean_score ┆ max_score │
+│ ---          ┆ ---    ┆ ---       ┆ ---        ┆ ---       │
+│ str          ┆ u32    ┆ f64       ┆ f64        ┆ f64       │
+╞══════════════╪════════╪═══════════╪════════════╪═══════════╡
+│ FIRST_REPLY  ┆ 17920  ┆ 0.0       ┆ 102.279034 ┆ 2327.15   │
+│ GLOBAL_DECAY ┆ 241999 ┆ 0.0       ┆ 19.331765  ┆ 2085.86   │
+│ LOCAL_DECAY  ┆ 451436 ┆ 0.0       ┆ 3.484873   ┆ 1132.95   │
+└──────────────┴────────┴───────────┴────────────┴───────────┘
+2026-06-20T07:50:35Z | INFO | mindshare_compute.pipeline | Verification preview:
+shape: (20, 12)
+┌─────────────────┬─────────────────┬─────────────────┬──────────────┬───┬─────────────────┬──────────────┬─────────────────┬──────────────┐
+│ project_keyword ┆ reply_post_id   ┆ original_post_i ┆ replier_x_id ┆ … ┆ contribution_sc ┆ reply_number ┆ local_reply_cou ┆ decay_type   │
+│ ---             ┆ ---             ┆ d               ┆ ---          ┆   ┆ ore             ┆ ---          ┆ nt              ┆ ---          │
+│ str             ┆ str             ┆ ---             ┆ str          ┆   ┆ ---             ┆ i64          ┆ ---             ┆ str          │
+│                 ┆                 ┆ str             ┆              ┆   ┆ f64             ┆              ┆ i64             ┆              │
+╞═════════════════╪═════════════════╪═════════════════╪══════════════╪═══╪═════════════════╪══════════════╪═════════════════╪══════════════╡
+│ sleepagotchi    ┆ 205240846029828 ┆ 205239893948409 ┆              ┆ … ┆ 0.0             ┆ 1            ┆ 1               ┆ FIRST_REPLY  │
+│                 ┆ 9419            ┆ 4516            ┆              ┆   ┆                 ┆              ┆                 ┆              │
+│ sleepagotchi    ┆ 205246030074660 ┆ 205245733111664 ┆              ┆ … ┆ 0.0             ┆ 2            ┆ 1               ┆ GLOBAL_DECAY │
+│                 ┆ 4806            ┆ 6833            ┆              ┆   ┆                 ┆              ┆                 ┆              │
+│ sleepagotchi    ┆ 205246063835893 ┆ 205242645041899 ┆              ┆ … ┆ 0.0             ┆ 3            ┆ 1               ┆ GLOBAL_DECAY │
+│                 ┆ 7721            ┆ 1149            ┆              ┆   ┆                 ┆              ┆                 ┆              │
+│ sleepagotchi    ┆ 205246080007422 ┆ 205241061188404 ┆              ┆ … ┆ 0.0             ┆ 4            ┆ 1               ┆ GLOBAL_DECAY │
+│                 ┆ 8002            ┆ 0570            ┆              ┆   ┆                 ┆              ┆                 ┆              │
+│ sleepagotchi    ┆ 205246098427124 ┆ 205239087666033 ┆              ┆ … ┆ 0.0             ┆ 5            ┆ 1               ┆ GLOBAL_DECAY │
+│                 ┆ 1383            ┆ 8982            ┆              ┆   ┆                 ┆              ┆                 ┆              │
+│ …               ┆ …               ┆ …               ┆ …            ┆ … ┆ …               ┆ …            ┆ …               ┆ …            │
+│ sleepagotchi    ┆ 205321001986546 ┆ 205318711530407 ┆ 100108639    ┆ … ┆ 337.84          ┆ 1            ┆ 1               ┆ FIRST_REPLY  │
+│                 ┆ 1122            ┆ 9780            ┆              ┆   ┆                 ┆              ┆                 ┆              │
+│ sleepagotchi    ┆ 205322197826237 ┆ 205321602892295 ┆ 100108639    ┆ … ┆ 168.92          ┆ 2            ┆ 2               ┆ LOCAL_DECAY  │
+│                 ┆ 2378            ┆ 3803            ┆              ┆   ┆                 ┆              ┆                 ┆              │
+│ sleepagotchi    ┆ 205352971057203 ┆ 205346958336577 ┆ 100108639    ┆ … ┆ 152.03          ┆ 3            ┆ 1               ┆ GLOBAL_DECAY │
+│                 ┆ 2272            ┆ 9958            ┆              ┆   ┆                 ┆              ┆                 ┆              │
+│ sleepagotchi    ┆ 205353002155026 ┆ 205346958336577 ┆ 100108639    ┆ … ┆ 76.02           ┆ 4            ┆ 2               ┆ LOCAL_DECAY  │
+│                 ┆ 4358            ┆ 9958            ┆              ┆   ┆                 ┆              ┆                 ┆              │
+│ sleepagotchi    ┆ 205353086653897 ┆ 205264102474531 ┆ 100108639    ┆ … ┆ 38.01           ┆ 5            ┆ 3               ┆ LOCAL_DECAY  │
+│                 ┆ 5631            ┆ 6825            ┆              ┆   ┆                 ┆              ┆                 ┆              │
+└─────────────────┴─────────────────┴─────────────────┴──────────────┴───┴─────────────────┴──────────────┴─────────────────┴──────────────┘
+2026-06-20T07:50:35Z | INFO | mindshare_compute.pipeline | Starting write stage scope=project project=sleepagotchi output_dir=output/all_projects_e2e/sleepagotchi method=copy
+2026-06-20T07:50:35Z | INFO | mindshare_compute.db | Opening result writer target=pg schema=test_mindshare_score table=test_contribution_scores method=copy
+2026-06-20T07:50:36Z | INFO | mindshare_compute.db | Ensuring destination table exists: test_mindshare_score.test_contribution_scores
+2026-06-20T07:50:37Z | INFO | mindshare_compute.db | Deleting existing project rows from test_mindshare_score.test_contribution_scores project=sleepagotchi
+2026-06-20T07:50:42Z | INFO | mindshare_compute.pipeline | Wrote batch=00000 batch_rows=100000 total_rows=100000
+2026-06-20T07:50:45Z | INFO | mindshare_compute.pipeline | Wrote batch=00001 batch_rows=100000 total_rows=200000
+2026-06-20T07:50:48Z | INFO | mindshare_compute.pipeline | Wrote batch=00002 batch_rows=100000 total_rows=300000
+2026-06-20T07:50:51Z | INFO | mindshare_compute.pipeline | Wrote batch=00003 batch_rows=100000 total_rows=400000
+2026-06-20T07:50:54Z | INFO | mindshare_compute.pipeline | Wrote batch=00004 batch_rows=100000 total_rows=500000
+2026-06-20T07:50:58Z | INFO | mindshare_compute.pipeline | Wrote batch=00005 batch_rows=100000 total_rows=600000
+2026-06-20T07:51:02Z | INFO | mindshare_compute.pipeline | Wrote batch=00006 batch_rows=100000 total_rows=700000
+2026-06-20T07:51:03Z | INFO | mindshare_compute.pipeline | Wrote batch=00007 batch_rows=11355 total_rows=711355
+2026-06-20T07:51:03Z | INFO | mindshare_compute.pipeline | Write summary:
+{
+  "run_id": "20260620T073655Z-4159e2",
+  "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+  "stage": "write",
+  "write_target": "pg",
+  "destination_schema": "test_mindshare_score",
+  "destination_table": "test_contribution_scores",
+  "scope": "project",
+  "project_keyword": "sleepagotchi",
+  "output_dir": "output/all_projects_e2e/sleepagotchi",
+  "write_method": "copy",
+  "rows_written": 711355,
+  "destination_rows_after_write": 711355,
+  "postgres_write_seconds": 24.23169611406047,
+  "write_wall_seconds": 26.266892658022698
+}
+2026-06-20T07:51:03Z | INFO | mindshare_compute.pipeline | Completed project 5/6 project=sleepagotchi
+2026-06-20T07:51:03Z | INFO | mindshare_compute.pipeline | Starting project 6/6 project=TheARCTERMINAL
+2026-06-20T07:51:03Z | INFO | mindshare_compute.pipeline | Starting compute stage scope=project project=TheARCTERMINAL output_dir=output/all_projects_e2e/TheARCTERMINAL source_batch_size=100000
+2026-06-20T07:51:03Z | INFO | mindshare_compute.db | Opening source stream target=pg schema=mindshare scope=project project=TheARCTERMINAL batch_size=100000
+2026-06-20T07:51:30Z | INFO | mindshare_compute.pipeline | Computed part=00000 part_rows=100000 total_rows=100000
+2026-06-20T07:51:53Z | INFO | mindshare_compute.pipeline | Computed part=00001 part_rows=100000 total_rows=200000
+2026-06-20T07:52:08Z | INFO | mindshare_compute.pipeline | Computed part=00002 part_rows=100000 total_rows=300000
+2026-06-20T07:52:33Z | INFO | mindshare_compute.pipeline | Computed part=00003 part_rows=100000 total_rows=400000
+2026-06-20T07:52:56Z | INFO | mindshare_compute.pipeline | Computed part=00004 part_rows=100000 total_rows=500000
+2026-06-20T07:53:15Z | INFO | mindshare_compute.pipeline | Computed part=00005 part_rows=100000 total_rows=600000
+2026-06-20T07:53:34Z | INFO | mindshare_compute.pipeline | Computed part=00006 part_rows=100000 total_rows=700000
+2026-06-20T07:53:56Z | INFO | mindshare_compute.pipeline | Computed part=00007 part_rows=100000 total_rows=800000
+2026-06-20T07:54:15Z | INFO | mindshare_compute.pipeline | Computed part=00008 part_rows=100000 total_rows=900000
+2026-06-20T07:54:33Z | INFO | mindshare_compute.pipeline | Computed part=00009 part_rows=100000 total_rows=1000000
+2026-06-20T07:54:58Z | INFO | mindshare_compute.pipeline | Computed part=00010 part_rows=100000 total_rows=1100000
+2026-06-20T07:55:24Z | INFO | mindshare_compute.pipeline | Computed part=00011 part_rows=100000 total_rows=1200000
+2026-06-20T07:55:35Z | INFO | mindshare_compute.pipeline | Computed part=00012 part_rows=74206 total_rows=1274206
+2026-06-20T07:55:35Z | INFO | mindshare_compute.pipeline | Compute summary:
+{
+  "run_id": "20260620T073655Z-4159e2",
+  "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+  "stage": "compute",
+  "source_target": "pg",
+  "source_schema": "mindshare",
+  "scope": "project",
+  "project_keyword": "TheARCTERMINAL",
+  "output_dir": "output/all_projects_e2e/TheARCTERMINAL",
+  "rows_computed": 1274206,
+  "parquet_parts": 13,
+  "database_read_seconds": 246.1422343290178,
+  "algorithm_compute_seconds": 11.171241629985161,
+  "parquet_write_seconds": 0.5428029259783216,
+  "compute_wall_seconds": 257.85973969701445
+}
+2026-06-20T07:55:35Z | INFO | mindshare_compute.pipeline | Inspecting Parquet results scope=project project=TheARCTERMINAL output_dir=output/all_projects_e2e/TheARCTERMINAL parts=13
+2026-06-20T07:55:35Z | INFO | mindshare_compute.pipeline | Decay-type summary:
+shape: (3, 5)
+┌──────────────┬────────┬───────────┬────────────┬───────────┐
+│ decay_type   ┆ rows   ┆ min_score ┆ mean_score ┆ max_score │
+│ ---          ┆ ---    ┆ ---       ┆ ---        ┆ ---       │
+│ str          ┆ u32    ┆ f64       ┆ f64        ┆ f64       │
+╞══════════════╪════════╪═══════════╪════════════╪═══════════╡
+│ FIRST_REPLY  ┆ 39453  ┆ 0.0       ┆ 68.250583  ┆ 2645.09   │
+│ GLOBAL_DECAY ┆ 344730 ┆ 0.0       ┆ 16.333878  ┆ 2380.58   │
+│ LOCAL_DECAY  ┆ 890023 ┆ 0.0       ┆ 3.076512   ┆ 1132.95   │
+└──────────────┴────────┴───────────┴────────────┴───────────┘
+2026-06-20T07:55:36Z | INFO | mindshare_compute.pipeline | Verification preview:
+shape: (20, 12)
+┌─────────────────┬─────────────────┬─────────────────┬──────────────┬───┬─────────────────┬──────────────┬─────────────────┬──────────────┐
+│ project_keyword ┆ reply_post_id   ┆ original_post_i ┆ replier_x_id ┆ … ┆ contribution_sc ┆ reply_number ┆ local_reply_cou ┆ decay_type   │
+│ ---             ┆ ---             ┆ d               ┆ ---          ┆   ┆ ore             ┆ ---          ┆ nt              ┆ ---          │
+│ str             ┆ str             ┆ ---             ┆ str          ┆   ┆ ---             ┆ i64          ┆ ---             ┆ str          │
+│                 ┆                 ┆ str             ┆              ┆   ┆ f64             ┆              ┆ i64             ┆              │
+╞═════════════════╪═════════════════╪═════════════════╪══════════════╪═══╪═════════════════╪══════════════╪═════════════════╪══════════════╡
+│ TheARCTERMINAL  ┆ 204869387101871 ┆ 204861380366373 ┆              ┆ … ┆ 0.0             ┆ 1            ┆ 1               ┆ FIRST_REPLY  │
+│                 ┆ 7419            ┆ 3045            ┆              ┆   ┆                 ┆              ┆                 ┆              │
+│ TheARCTERMINAL  ┆ 204869629358605 ┆ 204863808568075 ┆              ┆ … ┆ 0.0             ┆ 2            ┆ 1               ┆ GLOBAL_DECAY │
+│                 ┆ 5459            ┆ 0607            ┆              ┆   ┆                 ┆              ┆                 ┆              │
+│ TheARCTERMINAL  ┆ 204935257626160 ┆ 204916501556405 ┆              ┆ … ┆ 0.0             ┆ 3            ┆ 1               ┆ GLOBAL_DECAY │
+│                 ┆ 3460            ┆ 0525            ┆              ┆   ┆                 ┆              ┆                 ┆              │
+│ TheARCTERMINAL  ┆ 204937303759466 ┆ 204937184234375 ┆              ┆ … ┆ 0.0             ┆ 4            ┆ 1               ┆ GLOBAL_DECAY │
+│                 ┆ 1129            ┆ 5923            ┆              ┆   ┆                 ┆              ┆                 ┆              │
+│ TheARCTERMINAL  ┆ 204937448761186 ┆ 204937184234375 ┆              ┆ … ┆ 0.0             ┆ 5            ┆ 2               ┆ LOCAL_DECAY  │
+│                 ┆ 3355            ┆ 5923            ┆              ┆   ┆                 ┆              ┆                 ┆              │
+│ …               ┆ …               ┆ …               ┆ …            ┆ … ┆ …               ┆ …            ┆ …               ┆ …            │
+│ TheARCTERMINAL  ┆ 205026253214152 ┆ 205024075954717 ┆              ┆ … ┆ 0.0             ┆ 16           ┆ 1               ┆ GLOBAL_DECAY │
+│                 ┆ 7190            ┆ 1139            ┆              ┆   ┆                 ┆              ┆                 ┆              │
+│ TheARCTERMINAL  ┆ 205026253732995 ┆ 205025685148943 ┆              ┆ … ┆ 0.0             ┆ 17           ┆ 2               ┆ LOCAL_DECAY  │
+│                 ┆ 4900            ┆ 1974            ┆              ┆   ┆                 ┆              ┆                 ┆              │
+│ TheARCTERMINAL  ┆ 205026269080791 ┆ 205025685148943 ┆              ┆ … ┆ 0.0             ┆ 18           ┆ 3               ┆ LOCAL_DECAY  │
+│                 ┆ 4707            ┆ 1974            ┆              ┆   ┆                 ┆              ┆                 ┆              │
+│ TheARCTERMINAL  ┆ 205026281891032 ┆ 205025150169688 ┆              ┆ … ┆ 0.0             ┆ 19           ┆ 1               ┆ GLOBAL_DECAY │
+│                 ┆ 2882            ┆ 0942            ┆              ┆   ┆                 ┆              ┆                 ┆              │
+│ TheARCTERMINAL  ┆ 205026282500460 ┆ 204991268453182 ┆              ┆ … ┆ 0.0             ┆ 20           ┆ 1               ┆ GLOBAL_DECAY │
+│                 ┆ 1647            ┆ 2642            ┆              ┆   ┆                 ┆              ┆                 ┆              │
+└─────────────────┴─────────────────┴─────────────────┴──────────────┴───┴─────────────────┴──────────────┴─────────────────┴──────────────┘
+2026-06-20T07:55:36Z | INFO | mindshare_compute.pipeline | Starting write stage scope=project project=TheARCTERMINAL output_dir=output/all_projects_e2e/TheARCTERMINAL method=copy
+2026-06-20T07:55:36Z | INFO | mindshare_compute.db | Opening result writer target=pg schema=test_mindshare_score table=test_contribution_scores method=copy
+2026-06-20T07:55:36Z | INFO | mindshare_compute.db | Ensuring destination table exists: test_mindshare_score.test_contribution_scores
+2026-06-20T07:55:38Z | INFO | mindshare_compute.db | Deleting existing project rows from test_mindshare_score.test_contribution_scores project=TheARCTERMINAL
+2026-06-20T07:55:42Z | INFO | mindshare_compute.pipeline | Wrote batch=00000 batch_rows=100000 total_rows=100000
+2026-06-20T07:55:47Z | INFO | mindshare_compute.pipeline | Wrote batch=00001 batch_rows=100000 total_rows=200000
+2026-06-20T07:55:50Z | INFO | mindshare_compute.pipeline | Wrote batch=00002 batch_rows=100000 total_rows=300000
+2026-06-20T07:55:53Z | INFO | mindshare_compute.pipeline | Wrote batch=00003 batch_rows=100000 total_rows=400000
+2026-06-20T07:55:56Z | INFO | mindshare_compute.pipeline | Wrote batch=00004 batch_rows=100000 total_rows=500000
+2026-06-20T07:56:00Z | INFO | mindshare_compute.pipeline | Wrote batch=00005 batch_rows=100000 total_rows=600000
+2026-06-20T07:56:04Z | INFO | mindshare_compute.pipeline | Wrote batch=00006 batch_rows=100000 total_rows=700000
+2026-06-20T07:56:07Z | INFO | mindshare_compute.pipeline | Wrote batch=00007 batch_rows=100000 total_rows=800000
+2026-06-20T07:56:11Z | INFO | mindshare_compute.pipeline | Wrote batch=00008 batch_rows=100000 total_rows=900000
+2026-06-20T07:56:14Z | INFO | mindshare_compute.pipeline | Wrote batch=00009 batch_rows=100000 total_rows=1000000
+2026-06-20T07:56:19Z | INFO | mindshare_compute.pipeline | Wrote batch=00010 batch_rows=100000 total_rows=1100000
+2026-06-20T07:56:24Z | INFO | mindshare_compute.pipeline | Wrote batch=00011 batch_rows=100000 total_rows=1200000
+2026-06-20T07:56:27Z | INFO | mindshare_compute.pipeline | Wrote batch=00012 batch_rows=74206 total_rows=1274206
+2026-06-20T07:56:28Z | INFO | mindshare_compute.pipeline | Write summary:
+{
+  "run_id": "20260620T073655Z-4159e2",
+  "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+  "stage": "write",
+  "write_target": "pg",
+  "destination_schema": "test_mindshare_score",
+  "destination_table": "test_contribution_scores",
+  "scope": "project",
+  "project_keyword": "TheARCTERMINAL",
+  "output_dir": "output/all_projects_e2e/TheARCTERMINAL",
+  "write_method": "copy",
+  "rows_written": 1274206,
+  "destination_rows_after_write": 1274206,
+  "postgres_write_seconds": 46.435494814941194,
+  "write_wall_seconds": 49.29698353802087
+}
+2026-06-20T07:56:28Z | INFO | mindshare_compute.pipeline | Completed project 6/6 project=TheARCTERMINAL
+2026-06-20T07:56:28Z | INFO | mindshare_compute.pipeline | All-projects summary:
+{
+  "run_id": "20260620T073655Z-4159e2",
+  "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+  "stage": "all-projects",
+  "enabled_project_count": 6,
+  "projects": [
+    "CNPYNetwork",
+    "IronAllies_",
+    "Pact_Swap",
+    "quipnetwork",
+    "sleepagotchi",
+    "TheARCTERMINAL"
+  ],
+  "output_root": "output/all_projects_e2e",
+  "succeeded_project_count": 6,
+  "failed_project_count": 0,
+  "succeeded_projects": [
+    "CNPYNetwork",
+    "IronAllies_",
+    "Pact_Swap",
+    "quipnetwork",
+    "sleepagotchi",
+    "TheARCTERMINAL"
+  ],
+  "failed_projects": [],
+  "total_rows_computed": 4815701,
+  "total_rows_written": 4815701,
+  "project_summaries": [
+    {
+      "project": "CNPYNetwork",
+      "status": "succeeded",
+      "output_dir": "output/all_projects_e2e/CNPYNetwork",
+      "compute_summary": {
+        "run_id": "20260620T073655Z-4159e2",
+        "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+        "stage": "compute",
+        "source_target": "pg",
+        "source_schema": "mindshare",
+        "scope": "project",
+        "project_keyword": "CNPYNetwork",
+        "output_dir": "output/all_projects_e2e/CNPYNetwork",
+        "rows_computed": 78202,
+        "parquet_parts": 1,
+        "database_read_seconds": 9.728898966975976,
+        "algorithm_compute_seconds": 0.7353891300153919,
+        "parquet_write_seconds": 0.04475157498382032,
+        "compute_wall_seconds": 10.509359904041048
+      },
+      "inspect_summary": {
+        "run_id": "20260620T073655Z-4159e2",
+        "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+        "output_dir": "output/all_projects_e2e/CNPYNetwork",
+        "parquet_parts": 1
+      },
+      "write_summary": {
+        "run_id": "20260620T073655Z-4159e2",
+        "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+        "stage": "write",
+        "write_target": "pg",
+        "destination_schema": "test_mindshare_score",
+        "destination_table": "test_contribution_scores",
+        "scope": "project",
+        "project_keyword": "CNPYNetwork",
+        "output_dir": "output/all_projects_e2e/CNPYNetwork",
+        "write_method": "copy",
+        "rows_written": 78202,
+        "destination_rows_after_write": 78202,
+        "postgres_write_seconds": 2.673392287979368,
+        "write_wall_seconds": 4.2126248920103535
+      }
+    },
+    {
+      "project": "IronAllies_",
+      "status": "succeeded",
+      "output_dir": "output/all_projects_e2e/IronAllies_",
+      "compute_summary": {
+        "run_id": "20260620T073655Z-4159e2",
+        "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+        "stage": "compute",
+        "source_target": "pg",
+        "source_schema": "mindshare",
+        "scope": "project",
+        "project_keyword": "IronAllies_",
+        "output_dir": "output/all_projects_e2e/IronAllies_",
+        "rows_computed": 23556,
+        "parquet_parts": 1,
+        "database_read_seconds": 2.2813327519688755,
+        "algorithm_compute_seconds": 0.21280866401502863,
+        "parquet_write_seconds": 0.015376436989754438,
+        "compute_wall_seconds": 2.50990616803756
+      },
+      "inspect_summary": {
+        "run_id": "20260620T073655Z-4159e2",
+        "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+        "output_dir": "output/all_projects_e2e/IronAllies_",
+        "parquet_parts": 1
+      },
+      "write_summary": {
+        "run_id": "20260620T073655Z-4159e2",
+        "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+        "stage": "write",
+        "write_target": "pg",
+        "destination_schema": "test_mindshare_score",
+        "destination_table": "test_contribution_scores",
+        "scope": "project",
+        "project_keyword": "IronAllies_",
+        "output_dir": "output/all_projects_e2e/IronAllies_",
+        "write_method": "copy",
+        "rows_written": 23556,
+        "destination_rows_after_write": 23556,
+        "postgres_write_seconds": 1.4316880489932373,
+        "write_wall_seconds": 3.0204087820020504
+      }
+    },
+    {
+      "project": "Pact_Swap",
+      "status": "succeeded",
+      "output_dir": "output/all_projects_e2e/Pact_Swap",
+      "compute_summary": {
+        "run_id": "20260620T073655Z-4159e2",
+        "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+        "stage": "compute",
+        "source_target": "pg",
+        "source_schema": "mindshare",
+        "scope": "project",
+        "project_keyword": "Pact_Swap",
+        "output_dir": "output/all_projects_e2e/Pact_Swap",
+        "rows_computed": 241570,
+        "parquet_parts": 3,
+        "database_read_seconds": 48.175540016032755,
+        "algorithm_compute_seconds": 2.5151647710590623,
+        "parquet_write_seconds": 0.09129594202386215,
+        "compute_wall_seconds": 50.782673508045264
+      },
+      "inspect_summary": {
+        "run_id": "20260620T073655Z-4159e2",
+        "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+        "output_dir": "output/all_projects_e2e/Pact_Swap",
+        "parquet_parts": 3
+      },
+      "write_summary": {
+        "run_id": "20260620T073655Z-4159e2",
+        "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+        "stage": "write",
+        "write_target": "pg",
+        "destination_schema": "test_mindshare_score",
+        "destination_table": "test_contribution_scores",
+        "scope": "project",
+        "project_keyword": "Pact_Swap",
+        "output_dir": "output/all_projects_e2e/Pact_Swap",
+        "write_method": "copy",
+        "rows_written": 241570,
+        "destination_rows_after_write": 241570,
+        "postgres_write_seconds": 5.821544306003489,
+        "write_wall_seconds": 7.491174683964346
+      }
+    },
+    {
+      "project": "quipnetwork",
+      "status": "succeeded",
+      "output_dir": "output/all_projects_e2e/quipnetwork",
+      "compute_summary": {
+        "run_id": "20260620T073655Z-4159e2",
+        "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+        "stage": "compute",
+        "source_target": "pg",
+        "source_schema": "mindshare",
+        "scope": "project",
+        "project_keyword": "quipnetwork",
+        "output_dir": "output/all_projects_e2e/quipnetwork",
+        "rows_computed": 2486812,
+        "parquet_parts": 25,
+        "database_read_seconds": 479.10017535014777,
+        "algorithm_compute_seconds": 21.90080263983691,
+        "parquet_write_seconds": 1.0949343909160234,
+        "compute_wall_seconds": 502.10360960901016
+      },
+      "inspect_summary": {
+        "run_id": "20260620T073655Z-4159e2",
+        "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+        "output_dir": "output/all_projects_e2e/quipnetwork",
+        "parquet_parts": 25
+      },
+      "write_summary": {
+        "run_id": "20260620T073655Z-4159e2",
+        "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+        "stage": "write",
+        "write_target": "pg",
+        "destination_schema": "test_mindshare_score",
+        "destination_table": "test_contribution_scores",
+        "scope": "project",
+        "project_keyword": "quipnetwork",
+        "output_dir": "output/all_projects_e2e/quipnetwork",
+        "write_method": "copy",
+        "rows_written": 2486812,
+        "destination_rows_after_write": 2486812,
+        "postgres_write_seconds": 72.5722678299644,
+        "write_wall_seconds": 74.41131464502541
+      }
+    },
+    {
+      "project": "sleepagotchi",
+      "status": "succeeded",
+      "output_dir": "output/all_projects_e2e/sleepagotchi",
+      "compute_summary": {
+        "run_id": "20260620T073655Z-4159e2",
+        "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+        "stage": "compute",
+        "source_target": "pg",
+        "source_schema": "mindshare",
+        "scope": "project",
+        "project_keyword": "sleepagotchi",
+        "output_dir": "output/all_projects_e2e/sleepagotchi",
+        "rows_computed": 711355,
+        "parquet_parts": 8,
+        "database_read_seconds": 116.3038251339458,
+        "algorithm_compute_seconds": 5.9925575029919855,
+        "parquet_write_seconds": 0.2743536719935946,
+        "compute_wall_seconds": 122.57333075499628
+      },
+      "inspect_summary": {
+        "run_id": "20260620T073655Z-4159e2",
+        "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+        "output_dir": "output/all_projects_e2e/sleepagotchi",
+        "parquet_parts": 8
+      },
+      "write_summary": {
+        "run_id": "20260620T073655Z-4159e2",
+        "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+        "stage": "write",
+        "write_target": "pg",
+        "destination_schema": "test_mindshare_score",
+        "destination_table": "test_contribution_scores",
+        "scope": "project",
+        "project_keyword": "sleepagotchi",
+        "output_dir": "output/all_projects_e2e/sleepagotchi",
+        "write_method": "copy",
+        "rows_written": 711355,
+        "destination_rows_after_write": 711355,
+        "postgres_write_seconds": 24.23169611406047,
+        "write_wall_seconds": 26.266892658022698
+      }
+    },
+    {
+      "project": "TheARCTERMINAL",
+      "status": "succeeded",
+      "output_dir": "output/all_projects_e2e/TheARCTERMINAL",
+      "compute_summary": {
+        "run_id": "20260620T073655Z-4159e2",
+        "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+        "stage": "compute",
+        "source_target": "pg",
+        "source_schema": "mindshare",
+        "scope": "project",
+        "project_keyword": "TheARCTERMINAL",
+        "output_dir": "output/all_projects_e2e/TheARCTERMINAL",
+        "rows_computed": 1274206,
+        "parquet_parts": 13,
+        "database_read_seconds": 246.1422343290178,
+        "algorithm_compute_seconds": 11.171241629985161,
+        "parquet_write_seconds": 0.5428029259783216,
+        "compute_wall_seconds": 257.85973969701445
+      },
+      "inspect_summary": {
+        "run_id": "20260620T073655Z-4159e2",
+        "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+        "output_dir": "output/all_projects_e2e/TheARCTERMINAL",
+        "parquet_parts": 13
+      },
+      "write_summary": {
+        "run_id": "20260620T073655Z-4159e2",
+        "log_file": "logs/2026-06-20/20260620T073655Z-4159e2/pipeline.log",
+        "stage": "write",
+        "write_target": "pg",
+        "destination_schema": "test_mindshare_score",
+        "destination_table": "test_contribution_scores",
+        "scope": "project",
+        "project_keyword": "TheARCTERMINAL",
+        "output_dir": "output/all_projects_e2e/TheARCTERMINAL",
+        "write_method": "copy",
+        "rows_written": 1274206,
+        "destination_rows_after_write": 1274206,
+        "postgres_write_seconds": 46.435494814941194,
+        "write_wall_seconds": 49.29698353802087
+      }
+    }
+  ]
+}
+2026-06-20T07:56:28Z | INFO | mindshare_compute.pipeline | Completed run_id=20260620T073655Z-4159e2 command=all-projects

@@ -12,7 +12,7 @@ BEGIN
         WHERE project_name IS NOT NULL AND project_name != ''
     LOOP
         RAISE NOTICE 'Refreshing view for: %', handle;
-        EXECUTE format('REFRESH MATERIALIZED VIEW analytics.%I', 'mv_engagement_' || handle);
+        EXECUTE format('REFRESH MATERIALIZED VIEW CONCURRENTLY analytics.%I', 'mv_engagement_' || handle);
     END LOOP;
 END;
 $procedure$

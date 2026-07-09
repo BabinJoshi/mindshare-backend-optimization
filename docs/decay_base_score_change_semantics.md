@@ -50,13 +50,12 @@ change rescales every affected row by the same ratio.
 
 ---
 
-## The three options
+## The two options
 
 | Option | Rule | History |
 |---|---|---|
 | **A — Frozen (as-of)** | each row keeps the score it was computed with; a score change only affects **future** replies | immutable |
 | **B — Retroactive** *(current implementation)* | a score change recomputes **all** of that replier's rows with the new score | rewritten |
-| **Hybrid** | recompute only the last N days with the new score, freeze older | mixed vintage |
 
 ---
 
@@ -127,22 +126,6 @@ periods**.
 
 ---
 
-## Why the Hybrid ("recompute last 30 days") is the messiest choice
-It's tempting to say "recompute the last 30 days with the new score, freeze older." Two problems:
-
-1. **It conflates two unrelated windows.** The 30-day `reset_interval` governs the *reply-decay
-   penalty* (how fast repeat-replies to the same author decay). It has **nothing** to do with how
-   fresh a base score is. Reusing it as the base-score-freshness window is arbitrary.
-2. **It produces mixed-vintage history.** A single replier ends up with some rows at the old score
-   and some at the new — so "sum of Alice's contributions" blends two scoring regimes and is hard
-   to reason about or audit.
-
-The two *clean* choices are fully-frozen or fully-retroactive. If you want a boundary, make it a
-**period boundary you actually settle on** (e.g., "closed months are frozen, the open month is
-live"), not the decay window.
-
----
-
 ## What the current implementation does (Option B — retroactive)
 The incremental pipeline currently matches the old full-rebuild: **a base-score change recomputes
 that replier's entire history with the new score.**
@@ -203,8 +186,8 @@ retroactive change does **not** require a sequential replay — it can be applie
 **rescale** (`UPDATE … SET contribution_score = round(contribution_score * new/old, 2)`,
 re-flooring at `round(new_score × 0.01, 2)`). So performance should not drive the choice.
 
-**4. It's the simpler system.** One score per user, applied uniformly. No per-row "as-of"
-bookkeeping, no mixed vintages, no arbitrary window — fewer ways to be wrong.
+**4. It's the simpler system.** One score per user, applied uniformly — no per-row "as-of"
+bookkeeping to maintain (as the frozen option would require). Fewer ways to be wrong.
 
 ### The one legitimate downside — handled at the output layer, not the decay layer
 The real argument for freezing is **settled fairness**: if a "Week 12" leaderboard was already
@@ -223,8 +206,6 @@ buy immutability but lose the ability to correct bots — a bad trade for this d
 - **Keep fully retroactive (B)** for `contribution_scores` — do **not** change branch 3 or the
   `last_user_ingest_ts` watermark in the incremental functions.
 - **Snapshot leaderboards at settlement points** to make paid/published periods immutable.
-- **Avoid the "recompute last 30 days" hybrid** — it mixes vintages on an unrelated window for no
-  benefit.
 
 **The only scenario that would flip this to frozen** is if KL-score changes are almost purely
 *organic growth* with essentially **no** correction / anti-gaming component — which is unusual for

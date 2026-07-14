@@ -28,6 +28,8 @@ DECLARE
     v_username_updates   bigint := 0;
     v_rows_updated       bigint := 0;
     v_run_id             bigint := analytics_md_fix.next_engagement_run_id();
+    v_err_detail         text;
+    v_err_context        text;
 BEGIN
     PERFORM pg_advisory_xact_lock(hashtext('analytics_engagement:user_posts_engagement'));
 
@@ -149,9 +151,10 @@ BEGIN
         RAISE NOTICE 'analytics_md_fix.mv_user_posts_engagement: incremental +% engagement rows, ~% rows refreshed, post_watermark=%, user_watermark=%',
             v_new_rows, v_rows_updated, v_new_watermark, v_new_user_watermark;
     EXCEPTION WHEN OTHERS THEN
+        GET STACKED DIAGNOSTICS v_err_detail = PG_EXCEPTION_DETAIL, v_err_context = PG_EXCEPTION_CONTEXT;
         PERFORM analytics_md_fix._log_engagement_run(
             v_run_id, 'global', NULL, 'incremental', 'failed', 'error', SQLERRM,
-            0, 0, 0, SQLSTATE, SQLERRM, PG_EXCEPTION_DETAIL, PG_EXCEPTION_CONTEXT, true);
+            0, 0, 0, SQLSTATE, SQLERRM, v_err_detail, v_err_context, true);
         RAISE;
     END;
 END;

@@ -20,6 +20,8 @@ DECLARE
     v_user_watermark timestamptz := clock_timestamp();
     v_rows           bigint;
     v_run_id         bigint := analytics_md_fix.next_engagement_run_id();
+    v_err_detail     text;
+    v_err_context    text;
 BEGIN
     PERFORM analytics_md_fix._log_engagement_run(
         v_run_id, 'global', NULL, 'full', 'running', 'building', 'full rebuild starting');
@@ -93,9 +95,10 @@ BEGIN
 
         RAISE NOTICE 'analytics_md_fix.mv_user_posts_engagement built full (% rows), watermark=%', v_rows, v_watermark;
     EXCEPTION WHEN OTHERS THEN
+        GET STACKED DIAGNOSTICS v_err_detail = PG_EXCEPTION_DETAIL, v_err_context = PG_EXCEPTION_CONTEXT;
         PERFORM analytics_md_fix._log_engagement_run(
             v_run_id, 'global', NULL, 'full', 'failed', 'error', SQLERRM,
-            0, 0, 0, SQLSTATE, SQLERRM, PG_EXCEPTION_DETAIL, PG_EXCEPTION_CONTEXT, true);
+            0, 0, 0, SQLSTATE, SQLERRM, v_err_detail, v_err_context, true);
         RAISE;
     END;
 END;

@@ -31,6 +31,8 @@ DECLARE
     v_user_watermark timestamptz := clock_timestamp();
     v_rows        bigint;
     v_run_id      bigint := analytics_md_fix.next_engagement_run_id();
+    v_err_detail  text;
+    v_err_context text;
 BEGIN
     SELECT project_name INTO v_project_keyword
     FROM mindshare.mindshare_project
@@ -147,9 +149,10 @@ BEGIN
 
         RAISE NOTICE 'analytics_md_fix.% built full (% rows), watermark=%', v_table, v_rows, v_watermark;
     EXCEPTION WHEN OTHERS THEN
+        GET STACKED DIAGNOSTICS v_err_detail = PG_EXCEPTION_DETAIL, v_err_context = PG_EXCEPTION_CONTEXT;
         PERFORM analytics_md_fix._log_engagement_run(
             v_run_id, 'project', v_project_keyword, 'full', 'failed', 'error', SQLERRM,
-            0, 0, 0, SQLSTATE, SQLERRM, PG_EXCEPTION_DETAIL, PG_EXCEPTION_CONTEXT, true);
+            0, 0, 0, SQLSTATE, SQLERRM, v_err_detail, v_err_context, true);
         RAISE;
     END;
 END;

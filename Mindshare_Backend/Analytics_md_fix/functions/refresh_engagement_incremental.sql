@@ -42,6 +42,8 @@ DECLARE
     v_username_updates      bigint := 0;
     v_rows_updated          bigint := 0;
     v_run_id                bigint := analytics_md_fix.next_engagement_run_id();
+    v_err_detail            text;
+    v_err_context           text;
 BEGIN
     SELECT project_name INTO v_project_keyword
     FROM mindshare.mindshare_project
@@ -245,9 +247,10 @@ BEGIN
         RAISE NOTICE 'analytics_md_fix.%: incremental +% engagement rows, +% placeholders, -% stale placeholders, ~% rows refreshed, post_watermark=%, user_watermark=%',
             v_table, v_new_engagements, v_placeholders_inserted, v_placeholders_removed, v_rows_updated, v_new_watermark, v_new_user_watermark;
     EXCEPTION WHEN OTHERS THEN
+        GET STACKED DIAGNOSTICS v_err_detail = PG_EXCEPTION_DETAIL, v_err_context = PG_EXCEPTION_CONTEXT;
         PERFORM analytics_md_fix._log_engagement_run(
             v_run_id, 'project', v_project_keyword, 'incremental', 'failed', 'error', SQLERRM,
-            0, 0, 0, SQLSTATE, SQLERRM, PG_EXCEPTION_DETAIL, PG_EXCEPTION_CONTEXT, true);
+            0, 0, 0, SQLSTATE, SQLERRM, v_err_detail, v_err_context, true);
         RAISE;
     END;
 END;

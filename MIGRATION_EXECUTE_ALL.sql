@@ -1005,6 +1005,52 @@ END;
 $func$;
 
 -- ============================================================================
+-- Phase 7b: Separate wrapper function for ONLY global decay (PRODUCTION TABLES)
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION mindshare_score.calculate_all_global_decay_scores_incremental(
+    p_reset_interval interval DEFAULT '30 days'::interval,
+    p_log_every      integer  DEFAULT 50000
+) RETURNS void
+LANGUAGE plpgsql
+AS $func$
+DECLARE
+    t_start TIMESTAMP;
+    t_end   TIMESTAMP;
+    v_run_id BIGINT;
+    v_count  BIGINT;
+BEGIN
+    RAISE NOTICE '════════════════════════════════════════════════════';
+    RAISE NOTICE 'Starting INCREMENTAL global decay calculation (PRODUCTION TABLES)';
+    RAISE NOTICE '════════════════════════════════════════════════════';
+
+    t_start := clock_timestamp();
+
+    -- Run global incremental decay (PRODUCTION TABLES)
+    v_run_id := mindshare_score.calculate_global_decay_scores_incremental(
+        p_reset_interval := p_reset_interval,
+        p_log_every      := p_log_every
+    );
+
+    t_end := clock_timestamp();
+
+    -- Count rows
+    SELECT count(*) INTO v_count
+    FROM mindshare_score.global_contribution_scores;
+
+    RAISE NOTICE '✓ Global decay completed in % sec | Total rows: % | Run ID: %',
+        ROUND(EXTRACT(EPOCH FROM (t_end - t_start))::NUMERIC, 2),
+        v_count,
+        v_run_id;
+
+    RAISE NOTICE '';
+    RAISE NOTICE '════════════════════════════════════════════════════';
+    RAISE NOTICE 'Global decay processed successfully (PRODUCTION TABLES)!';
+    RAISE NOTICE '════════════════════════════════════════════════════';
+END;
+$func$;
+
+-- ============================================================================
 -- VERIFICATION
 -- ============================================================================
 

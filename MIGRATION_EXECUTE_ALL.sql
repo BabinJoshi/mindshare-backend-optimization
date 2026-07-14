@@ -699,7 +699,7 @@ SET search_path = mindshare, mindshare_score, public
 AS $func$
 DECLARE
     v_run_id  bigint := COALESCE(p_run_id, nextval('mindshare_score.decay_run_id_seq'));
-    v_scope   text   := 'project:' || p_project_keyword || ':TEST';
+    v_scope   text   := 'project:' || p_project_keyword;
     v_since      timestamptz;
     v_new        timestamptz;
     v_user_since timestamptz;
@@ -821,7 +821,7 @@ SET search_path = mindshare, mindshare_score, public
 AS $func$
 DECLARE
     v_run_id bigint := COALESCE(p_run_id, nextval('mindshare_score.decay_run_id_seq'));
-    v_scope  text   := 'global:TEST';
+    v_scope  text   := 'global';
     v_since  timestamptz;
     v_new    timestamptz;
     v_user_since timestamptz;
@@ -922,6 +922,85 @@ EXCEPTION WHEN OTHERS THEN
             format('FAILED (incremental, PRODUCTION TABLE): %s', v_msg), v_count, v_state, v_msg, v_detail, v_context, true);
     END;
     RAISE;
+END;
+$func$;
+
+-- ============================================================================
+-- Phase 7: Wrapper function to run incremental decay for ALL projects at once
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION mindshare_score.calculate_all_decay_scores_incremental(
+    p_reset_interval interval DEFAULT '30 days'::interval,
+    p_log_every      integer  DEFAULT 50000
+) RETURNS void
+LANGUAGE plpgsql
+AS $func$
+DECLARE
+    proj    RECORD;
+    t_start TIMESTAMP;
+    t_end   TIMESTAMP;
+    v_run_id BIGINT;
+    v_count  BIGINT;
+BEGIN
+    RAISE NOTICE '════════════════════════════════════════════════════';
+    RAISE NOTICE 'Starting INCREMENTAL decay run for ALL projects (PRODUCTION TABLES)';
+    RAISE NOTICE '════════════════════════════════════════════════════';
+
+    -- Process each project
+    FOR proj IN
+        SELECT DISTINCT project_keyword
+        FROM mindshare.mindshare_post
+        WHERE is_reply = true
+        ORDER BY project_keyword
+    LOOP
+        t_start := clock_timestamp();
+        RAISE NOTICE '';
+        RAISE NOTICE '→ Project: %', proj.project_keyword;
+
+        -- Run incremental decay for this project (PRODUCTION TABLES)
+        v_run_id := mindshare_score.calculate_decay_scores_incremental(
+            p_project_keyword  := proj.project_keyword,
+            p_reset_interval   := p_reset_interval,
+            p_log_every        := p_log_every
+        );
+
+        t_end := clock_timestamp();
+
+        -- Count rows for this project
+        SELECT count(*) INTO v_count
+        FROM mindshare_score.contribution_scores
+        WHERE project_keyword = proj.project_keyword;
+
+        RAISE NOTICE '  ✓ Completed in % sec | Total rows: % | Run ID: %',
+            ROUND(EXTRACT(EPOCH FROM (t_end - t_start))::NUMERIC, 2),
+            v_count,
+            v_run_id;
+    END LOOP;
+
+    -- Process global decay (PRODUCTION TABLES)
+    RAISE NOTICE '';
+    RAISE NOTICE '→ Global decay calculation (PRODUCTION TABLES)';
+    t_start := clock_timestamp();
+
+    v_run_id := mindshare_score.calculate_global_decay_scores_incremental(
+        p_reset_interval := p_reset_interval,
+        p_log_every      := p_log_every
+    );
+
+    t_end := clock_timestamp();
+
+    SELECT count(*) INTO v_count
+    FROM mindshare_score.global_contribution_scores;
+
+    RAISE NOTICE '  ✓ Completed in % sec | Total rows: % | Run ID: %',
+        ROUND(EXTRACT(EPOCH FROM (t_end - t_start))::NUMERIC, 2),
+        v_count,
+        v_run_id;
+
+    RAISE NOTICE '';
+    RAISE NOTICE '════════════════════════════════════════════════════';
+    RAISE NOTICE 'All projects processed successfully (PRODUCTION TABLES)!';
+    RAISE NOTICE '════════════════════════════════════════════════════';
 END;
 $func$;
 

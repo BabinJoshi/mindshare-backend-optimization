@@ -977,29 +977,10 @@ BEGIN
             v_run_id;
     END LOOP;
 
-    -- Process global decay (TEST TABLES)
-    RAISE NOTICE '';
-    RAISE NOTICE '→ Global decay calculation (TEST TABLES)';
-    t_start := clock_timestamp();
-
-    v_run_id := mindshare_score.calculate_global_decay_scores_incremental_test(
-        p_reset_interval := p_reset_interval,
-        p_log_every      := p_log_every
-    );
-
-    t_end := clock_timestamp();
-
-    SELECT count(*) INTO v_count
-    FROM mindshare_score.global_contribution_scores_test;
-
-    RAISE NOTICE '  ✓ Completed in % sec | Total rows: % | Run ID: %',
-        ROUND(EXTRACT(EPOCH FROM (t_end - t_start))::NUMERIC, 2),
-        v_count,
-        v_run_id;
-
     RAISE NOTICE '';
     RAISE NOTICE '════════════════════════════════════════════════════';
     RAISE NOTICE 'All projects processed successfully (TEST TABLES)!';
+    RAISE NOTICE 'Run calculate_all_global_decay_scores_incremental_test() separately for global decay';
     RAISE NOTICE '════════════════════════════════════════════════════';
 END;
 $func$;

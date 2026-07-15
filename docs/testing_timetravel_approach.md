@@ -117,8 +117,9 @@ ROLLBACK; -- undoes the checkpoint rewind, the DELETE, and the re-INSERT — no 
 ```
 
 Swap `'Acurast'` / `mv_engagement_acurast` / `'project:acurast'` and the
-`interval '7 days'` for whatever project/window you want to test (e.g. `interval '1 day'`
-for a daily-cadence test) — check the dry-run count first either way.
+`interval '7 days'` for whatever project/window you want to test (`interval '1 day'` for a
+daily-cadence test, `interval '30 days'` for a monthly-backlog test) — check the dry-run
+count first either way, especially at 30 days on a large scope.
 
 ### Global scope (`mv_user_posts_engagement`, 7-day window)
 
@@ -185,7 +186,7 @@ SELECT count(*) AS rowcount_after_reinsert FROM analytics_md_fix.mv_user_posts_e
 ROLLBACK;
 ```
 
-## Measured results — all projects, full build vs weekly vs daily incremental
+## Measured results — all projects, full build vs weekly vs daily incremental (2026-07-12 baseline)
 
 Run one project at a time (same `BEGIN...ROLLBACK` pattern above, 7-day and 1-day
 real-write windows), 2026-07-12. Full-build timing pulled from `engagement_run_log`'s
@@ -194,6 +195,12 @@ batch, so directly comparable). Weekly/daily numbers are fresh, real writes (not
 scan-only) — every row deleted from the target was genuinely reinserted by the
 unmodified `refresh_engagement_incremental` proc, then `ROLLBACK`ed. Every project's
 final row count was confirmed to match its pre-test count exactly.
+
+> The 13-project table below is the original 2026-07-12 benchmark, kept as-is for
+> reference. `Acurast` and the global scope were **re-verified on 2026-07-14** with the
+> current dual-watermark procs and an added 30-day window — see
+> "[Re-verified 2026-07-14](#re-verified-2026-07-14--example-project--global-with-a-30-day-window)"
+> below. The global numbers changed materially; the project story did not.
 
 | Project | Full build (ms) | Weekly (7d) real-write (ms) | Weekly speedup | Daily (1d) real-write (ms) | Daily speedup |
 |---|---|---|---|---|---|
@@ -225,24 +232,66 @@ consistently a much bigger win (51x-1,725x) across every project, since one day 
 backlog is a small fraction of any of these tables.
 
 Global scope (`user_posts_engagement`, 4.2M rows), measured 2026-07-12 (run by hand in
-DBeaver — tool-call access was blocked mid-session):
+DBeaver — tool-call access was blocked mid-session). **Superseded by the 2026-07-14
+re-verification below** — kept only to show the change:
 
 | Scope | Full build (ms) | Weekly (7d) real-write (ms) | Weekly speedup | Daily (1d) real-write (ms) | Daily speedup |
 |---|---|---|---|---|---|
-| global | 34,892 | 18,446 | 1.9x | 9,238 | 3.8x |
+| global (2026-07-12, pre-dual-watermark) | 34,892 | 18,446 | 1.9x | 9,238 | 3.8x |
 
-**Why global's speedups are much smaller than every project above:** the checkpoint's
-`last_ingest_ts` was already `2026-07-06` before this test — global `user_post`
-ingestion genuinely stops there (no rows exist past that date on this DB), and `07-06`
-itself was the single densest ingestion day in the whole dataset: 244,282 rows in one
-day, versus 35k-52k/day the days before. Rewinding 7 days lands the window on
-`~06-29 to 07-06` (~500k genuinely dirty rows); rewinding just 1 day still mostly lands
-on that same `07-06` burst, which is why daily only reaches 3.8x instead of the
-500x-1,700x seen on every other project's daily window. This isn't a regression in the
-incremental logic — it's what happens when the "most recent day" in the source data
-happens to be an unusually large ingestion burst rather than a typical day. On a typical
-(non-burst) day, global's daily speedup would be expected to land in the same range as
-the other projects.
+## Re-verified 2026-07-14 — example project + global, with a 30-day window
+
+Re-ran the example project (`Acurast`) and the global scope on 2026-07-14 with the
+current **dual-watermark** procs, adding a 30-day window. Full-build timings are fresh
+`BEGIN...ROLLBACK` runs of the same procs (not pulled from the log). Every run's
+`after_reinsert` row count matched its pre-test count exactly.
+
+| Scope | Rows | Full build (ms) | 30d real-write (ms / speedup) | 7d real-write (ms / speedup) | 1d real-write (ms / speedup) |
+|---|---|---|---|---|---|
+| Acurast (project) | 114,576 | 1,784 | 42 / **43x** | 24 / **74x** | 20 / **90x** |
+| global | 4,218,967 | 45,723 | 82,559 / **0.55x** | 29,900 / **1.5x** | 36,911 / **1.2x** |
+
+Rows actually reinserted per window (real writes, then rolled back): Acurast 105 / 13 / 12;
+global 1,659,905 / 533,893 / 238,391.
+
+**Project scope stays a large win at every window** (43x–90x for Acurast). Each project's
+dirty-scan only touches its own partition, so cost tracks the (tiny) recent-ingestion
+volume — the same story as the 2026-07-12 table.
+
+**Global scope is now marginal-to-net-loss for any rewound window — the honest result, not
+a correctness regression.** Two compounding, data-shape-specific reasons:
+
+1. **Burst day.** Global `user_post` ingestion stops at `2026-07-06`, and `07-06` was the
+   single densest day in the dataset (244,282 rows vs 35k–52k the days before). So even a
+   1-day rewind reprocesses that entire burst (~238k rows), not a typical small day.
+2. **Fixed root-resolution scan floor.** The global re-insert resolves every dirty engaged
+   tweet back to its root via a self-join against the full 4.2M-row `user_post` table, plus
+   two joins to `mindshare_user` for live score/username. That cost is largely *fixed*
+   regardless of dirty-set size — which is why all three windows cluster at ~30–37s and
+   don't scale cleanly with row count (1d 36.9s actually came in *slower* than 7d 29.9s:
+   noise around a fixed floor). At 30d the 1.66M reinserts push past that floor to 82.6s,
+   comfortably beyond the 45.7s full rebuild — so for a large global backlog, **a full
+   rebuild is simply the better tool.**
+
+These global numbers **supersede** the 2026-07-12 figures (1d 9.2s/3.8x, 7d 18.4s/1.9x),
+which were measured on the older single-watermark proc. The current proc does more work per
+reinserted row (the two `mindshare_user` LEFT JOINs the dual-watermark design added), and
+the fixed self-join floor dominates.
+
+**Framing — this is worst-case backlog catch-up, not the steady-state daily tick.** The
+time-travel test deletes and reinserts an entire N-day window in one shot. In production,
+global runs once per real ingest and processes only genuinely-new rows since the last
+watermark; on a normal (non-burst) day that is a small fraction of a day's data and
+finishes fast. The `07-06` burst is exactly the pathological case that makes any windowed
+rewind look bad.
+
+**Candidate optimization (observation, not yet done):** global's dominant cost is that the
+re-insert rescans all 4.2M `user_post` rows to resolve roots on every run. Restricting that
+join to only the roots reachable from the dirty set (e.g. an indexed temp table of the
+dirty engaged tweets' `COALESCE(replied,quoted,retweeted)_post_id` values, joined to
+`user_post` by `post_id`) would drop the fixed floor to track dirty-set size like the
+per-project scope already does. Worth doing only if global's per-run latency becomes a
+production concern.
 
 ## Caveats
 

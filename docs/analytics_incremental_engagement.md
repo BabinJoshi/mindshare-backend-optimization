@@ -404,11 +404,17 @@ covered, so there was nothing new to write. That's real scan cost (970k-1.7M row
 scanned in 22-47s), but not a write-cost measurement — which is why the delete step was
 added.
 
-The real-write version has since been run for all 13 projects + global — weekly (7-day)
-speedups ranged 1.9x-371x and daily (1-day) speedups 3.8x-1,725x depending on how bursty
-each project's recent ingestion is; full results table, per-project breakdown, and the
-two projects with unusually low speedups (explained by real ingestion bursts, not a
-regression) are in `docs/testing_timetravel_approach.md`.
+The real-write version has since been run for all 13 projects + global. For **project
+scope** it's consistently a large win — weekly (7-day) speedups ranged 1.9x-371x and daily
+(1-day) 3.8x-1,725x depending on how bursty each project's recent ingestion is (re-verified
+for `Acurast` on 2026-07-14: 30d 43x, 7d 74x, 1d 90x). For **global scope** the honest
+result is different: re-verified 2026-07-14 with the current dual-watermark proc, a rewound
+window is only marginal-to-net-loss (1d 1.2x, 7d 1.5x, 30d **0.55x** — i.e. slower than a
+full rebuild), because global's only ingested day is a 244k-row burst and the re-insert has
+a near-fixed ~30s floor from rescanning all 4.2M `user_post` rows to resolve roots. That's
+a worst-case *backlog catch-up* cost, not the steady-state daily tick. Full results table,
+per-project breakdown, and the global analysis (plus a candidate optimization) are in
+`docs/testing_timetravel_approach.md`.
 
 ## 5. Step-by-step: test this yourself (DBeaver)
 

@@ -189,12 +189,10 @@ ALTER TABLE mindshare_score.contribution_scores_test
 ALTER TABLE mindshare_score.global_contribution_scores_test
     SET (autovacuum_vacuum_scale_factor = 0.02, autovacuum_analyze_scale_factor = 0.02);
 
--- Analyze tables for statistics
-ANALYZE mindshare.mindshare_post;
-ANALYZE mindshare.user_post;
-ANALYZE mindshare.mindshare_user;
-ANALYZE mindshare_score.contribution_scores_test;
-ANALYZE mindshare_score.global_contribution_scores_test;
+-- NOTE: ANALYZE of the large source tables was removed from this script.
+-- It scanned millions of rows on every execution (minutes of wasted time)
+-- and autovacuum keeps statistics fresh automatically. If planner stats
+-- ever look stale, run manually: ANALYZE mindshare.mindshare_post; etc.
 
 -- ============================================================================
 -- PHASE 4: CORE DECAY FUNCTIONS (WRITES TO _TEST TABLES)
@@ -603,8 +601,14 @@ DECLARE
     penalty_authors  TEXT[];
     i INT;
     n INT;
+    m INT;
     active_product   NUMERIC;
     cutoff_time      TIMESTAMPTZ;
+    prev_replier     TEXT := NULL;
+    ins_mults        NUMERIC[];
+    new_mults        NUMERIC[];
+    new_times        TIMESTAMPTZ[];
+    new_authors      TEXT[];
 BEGIN
     -- Only proceed if there are new replies to process
     IF NOT EXISTS (SELECT 1 FROM tmp_new_replies) THEN
@@ -614,7 +618,9 @@ BEGIN
     PERFORM mindshare_score._decay_log(p_run_id,'project',p_project_keyword,'running','computing',
         'Processing new replies (OPTIMIZED - no history replay)', 0);
 
-    -- Process each new reply: load penalty history and calculate score
+    -- Process new replies GROUPED BY REPLIER: penalty history is loaded ONCE
+    -- per replier and then maintained in memory (same pattern as full rebuild).
+    -- Previous version ran 2 SELECTs per reply, which was the bottleneck.
     FOR rec IN
         SELECT p.project_keyword, c.post_id, op.post_id AS original_post_id,
                c.user_x_id AS replier_x_id, c.post_created_at,
@@ -624,67 +630,81 @@ BEGIN
             ON c.replied_post_id = op.post_id AND op.project_keyword = p_project_keyword
         INNER JOIN mindshare.mindshare_user u ON c.user_x_id = u.x_id
         INNER JOIN mindshare.mindshare_post p ON p.post_id = c.post_id
-        ORDER BY c.post_created_at, c.post_id
+        ORDER BY c.user_x_id, c.post_created_at, c.post_id
     LOOP
-        base_score      := rec.replier_base_score;
-        min_floor       := ROUND(base_score * 0.01, 2);
+        IF rec.replier_x_id IS DISTINCT FROM prev_replier THEN
+            prev_replier := rec.replier_x_id;
+            base_score   := rec.replier_base_score;
+            min_floor    := ROUND(base_score * 0.01, 2);
 
-        -- Load penalty history from existing scores (within reset_interval window)
-        SELECT
-            COALESCE(array_agg(own_mult ORDER BY post_created_at), ARRAY[]::numeric[]),
-            COALESCE(array_agg(post_created_at ORDER BY post_created_at), ARRAY[]::timestamptz[]),
-            COALESCE(array_agg(original_author_x_id ORDER BY post_created_at), ARRAY[]::text[])
-        INTO penalty_mults, penalty_times, penalty_authors
-        FROM (
-            SELECT post_created_at, original_author_x_id,
-                   active_multipliers[array_upper(active_multipliers,1)] AS own_mult
+            -- Load penalty history ONCE per replier (not per reply)
+            SELECT
+                COALESCE(array_agg(own_mult ORDER BY post_created_at), ARRAY[]::numeric[]),
+                COALESCE(array_agg(post_created_at ORDER BY post_created_at), ARRAY[]::timestamptz[]),
+                COALESCE(array_agg(original_author_x_id ORDER BY post_created_at), ARRAY[]::text[])
+            INTO penalty_mults, penalty_times, penalty_authors
+            FROM (
+                SELECT post_created_at, original_author_x_id,
+                       active_multipliers[array_upper(active_multipliers,1)] AS own_mult
+                FROM mindshare_score.contribution_scores_test
+                WHERE project_keyword = p_project_keyword AND replier_x_id = rec.replier_x_id
+                  AND post_created_at > (rec.post_created_at - p_reset_interval)
+            ) s;
+
+            -- Seed reply sequence ONCE per replier
+            SELECT COALESCE(MAX(reply_number), 0) INTO reply_seq
             FROM mindshare_score.contribution_scores_test
             WHERE project_keyword = p_project_keyword AND replier_x_id = rec.replier_x_id
-              AND post_created_at > (rec.post_created_at - p_reset_interval)
-              AND post_created_at < rec.post_created_at
-        ) s;
+              AND post_created_at < rec.post_created_at;
+        END IF;
 
-        -- Get reply sequence number
-        SELECT COALESCE(MAX(reply_number), 0) INTO reply_seq
-        FROM mindshare_score.contribution_scores_test
-        WHERE project_keyword = p_project_keyword AND replier_x_id = rec.replier_x_id
-          AND post_created_at < rec.post_created_at;
-        reply_seq := reply_seq + 1;
-
-        -- Calculate score for this new reply
+        reply_seq   := reply_seq + 1;
         cutoff_time := rec.post_created_at - p_reset_interval;
+
+        -- Prune entries that fell out of the decay window
+        new_mults := ARRAY[]::numeric[]; new_times := ARRAY[]::timestamptz[]; new_authors := ARRAY[]::text[];
         n := COALESCE(array_length(penalty_mults, 1), 0);
-        active_product := 1.0;
         FOR i IN 1 .. n LOOP
             IF penalty_times[i] > cutoff_time THEN
-                active_product := active_product * penalty_mults[i];
+                new_mults   := array_append(new_mults,   penalty_mults[i]);
+                new_times   := array_append(new_times,   penalty_times[i]);
+                new_authors := array_append(new_authors, penalty_authors[i]);
             END IF;
         END LOOP;
+        penalty_mults := new_mults; penalty_times := new_times; penalty_authors := new_authors;
+
+        -- Compute decay from in-window entries strictly before this reply
+        active_product := 1.0; local_seq := 0; m := 0;
+        ins_mults := ARRAY[]::numeric[];
+        n := COALESCE(array_length(penalty_mults, 1), 0);
+        FOR i IN 1 .. n LOOP
+            IF penalty_times[i] < rec.post_created_at THEN
+                m := m + 1;
+                active_product := active_product * penalty_mults[i];
+                ins_mults := array_append(ins_mults, penalty_mults[i]);
+                IF penalty_authors[i] = rec.original_author_x_id THEN
+                    local_seq := local_seq + 1;
+                END IF;
+            END IF;
+        END LOOP;
+        local_seq := local_seq + 1;
+
         effective_score := GREATEST(ROUND(base_score * active_product, 2), min_floor);
         calc_score      := effective_score;
 
         -- Determine decay type and apply multiplier
-        IF n = 0 THEN
+        IF m = 0 THEN
             dtype := 'FIRST_REPLY'; new_mult := 1.0;
+        ELSIF local_seq > 1 THEN
+            new_mult := 0.50; calc_score := GREATEST(ROUND(calc_score * 0.50, 2), min_floor); dtype := 'LOCAL_DECAY';
         ELSE
-            local_seq := 0;
-            FOR i IN 1 .. n LOOP
-                IF penalty_authors[i] = rec.original_author_x_id THEN
-                    local_seq := local_seq + 1;
-                END IF;
-            END LOOP;
-            local_seq := local_seq + 1;
-
-            IF local_seq > 1 THEN
-                new_mult := 0.50; calc_score := GREATEST(ROUND(calc_score * 0.50, 2), min_floor); dtype := 'LOCAL_DECAY';
-            ELSE
-                new_mult := 0.90; calc_score := GREATEST(ROUND(calc_score * 0.90, 2), min_floor); dtype := 'GLOBAL_DECAY';
-            END IF;
+            new_mult := 0.90; calc_score := GREATEST(ROUND(calc_score * 0.90, 2), min_floor); dtype := 'GLOBAL_DECAY';
         END IF;
 
         penalty_mults   := array_append(penalty_mults,   new_mult);
         penalty_times   := array_append(penalty_times,   rec.post_created_at);
         penalty_authors := array_append(penalty_authors, rec.original_author_x_id);
+        ins_mults       := array_append(ins_mults,       new_mult);
 
         -- Insert score for this new reply
         INSERT INTO mindshare_score.contribution_scores_test (
@@ -694,7 +714,7 @@ BEGIN
         ) VALUES (
             rec.project_keyword, rec.post_id, rec.original_post_id, rec.replier_x_id, rec.original_author_x_id,
             rec.post_created_at, rec.replier_base_score, effective_score, ROUND(calc_score, 2),
-            penalty_mults, reply_seq, COALESCE(local_seq, 1), dtype
+            ins_mults, reply_seq, local_seq, dtype
         );
 
         v_count := v_count + 1;
@@ -818,6 +838,161 @@ END;
 $func$;
 
 -- ============================================================================
+-- OPTIMIZED: Handle new global replies without full history replay (TEST TABLES)
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION mindshare_score._decay_apply_global_new_replies_test(
+    p_reset_interval interval,
+    p_run_id         bigint,
+    p_log_every      integer
+) RETURNS bigint
+LANGUAGE plpgsql
+SET random_page_cost = 1.1
+SET work_mem = '256MB'
+SET search_path = mindshare, mindshare_score, public
+AS $func$
+DECLARE
+    v_count          bigint := 0;
+    rec              RECORD;
+    base_score       NUMERIC;
+    min_floor        NUMERIC;
+    calc_score       NUMERIC;
+    effective_score  NUMERIC;
+    reply_seq        INT;
+    local_seq        INT;
+    dtype            TEXT;
+    new_mult         NUMERIC;
+    penalty_mults    NUMERIC[];
+    penalty_times    TIMESTAMPTZ[];
+    penalty_authors  TEXT[];
+    i INT;
+    n INT;
+    m INT;
+    active_product   NUMERIC;
+    cutoff_time      TIMESTAMPTZ;
+    prev_replier     TEXT := NULL;
+    ins_mults        NUMERIC[];
+    new_mults        NUMERIC[];
+    new_times        TIMESTAMPTZ[];
+    new_authors      TEXT[];
+BEGIN
+    -- Only proceed if there are new replies to process
+    IF NOT EXISTS (SELECT 1 FROM tmp_new_replies) THEN
+        RETURN 0;
+    END IF;
+
+    PERFORM mindshare_score._decay_log(p_run_id,'global',NULL,'running','computing',
+        'Processing new global replies (OPTIMIZED - no history replay)', 0);
+
+    -- Process new replies GROUPED BY REPLIER: penalty history is loaded ONCE
+    -- per replier and then maintained in memory (same pattern as full rebuild).
+    -- Previous version ran 2 SELECTs per reply, which was the bottleneck.
+    FOR rec IN
+        SELECT p.post_id AS reply_post_id, op.post_id AS original_post_id,
+               p.user_x_id AS replier_x_id, p.post_created_at,
+               op.user_x_id AS original_author_x_id, u.score AS replier_base_score
+        FROM tmp_new_replies c
+        INNER JOIN mindshare.user_post op ON c.replied_post_id = op.post_id
+        INNER JOIN mindshare.mindshare_user u ON c.user_x_id = u.x_id
+        INNER JOIN mindshare.user_post p ON p.post_id = c.post_id
+        ORDER BY c.user_x_id, c.post_created_at, c.post_id
+    LOOP
+        IF rec.replier_x_id IS DISTINCT FROM prev_replier THEN
+            prev_replier := rec.replier_x_id;
+            base_score   := rec.replier_base_score;
+            min_floor    := ROUND(base_score * 0.01, 2);
+
+            -- Load penalty history ONCE per replier (not per reply)
+            SELECT
+                COALESCE(array_agg(own_mult ORDER BY post_created_at), ARRAY[]::numeric[]),
+                COALESCE(array_agg(post_created_at ORDER BY post_created_at), ARRAY[]::timestamptz[]),
+                COALESCE(array_agg(original_author_x_id ORDER BY post_created_at), ARRAY[]::text[])
+            INTO penalty_mults, penalty_times, penalty_authors
+            FROM (
+                SELECT post_created_at, original_author_x_id,
+                       active_multipliers[array_upper(active_multipliers,1)] AS own_mult
+                FROM mindshare_score.global_contribution_scores_test
+                WHERE replier_x_id = rec.replier_x_id
+                  AND post_created_at > (rec.post_created_at - p_reset_interval)
+            ) s;
+
+            -- Seed reply sequence ONCE per replier
+            SELECT COALESCE(MAX(reply_number), 0) INTO reply_seq
+            FROM mindshare_score.global_contribution_scores_test
+            WHERE replier_x_id = rec.replier_x_id
+              AND post_created_at < rec.post_created_at;
+        END IF;
+
+        reply_seq   := reply_seq + 1;
+        cutoff_time := rec.post_created_at - p_reset_interval;
+
+        -- Prune entries that fell out of the decay window
+        new_mults := ARRAY[]::numeric[]; new_times := ARRAY[]::timestamptz[]; new_authors := ARRAY[]::text[];
+        n := COALESCE(array_length(penalty_mults, 1), 0);
+        FOR i IN 1 .. n LOOP
+            IF penalty_times[i] > cutoff_time THEN
+                new_mults   := array_append(new_mults,   penalty_mults[i]);
+                new_times   := array_append(new_times,   penalty_times[i]);
+                new_authors := array_append(new_authors, penalty_authors[i]);
+            END IF;
+        END LOOP;
+        penalty_mults := new_mults; penalty_times := new_times; penalty_authors := new_authors;
+
+        -- Compute decay from in-window entries strictly before this reply
+        active_product := 1.0; local_seq := 0; m := 0;
+        ins_mults := ARRAY[]::numeric[];
+        n := COALESCE(array_length(penalty_mults, 1), 0);
+        FOR i IN 1 .. n LOOP
+            IF penalty_times[i] < rec.post_created_at THEN
+                m := m + 1;
+                active_product := active_product * penalty_mults[i];
+                ins_mults := array_append(ins_mults, penalty_mults[i]);
+                IF penalty_authors[i] = rec.original_author_x_id THEN
+                    local_seq := local_seq + 1;
+                END IF;
+            END IF;
+        END LOOP;
+        local_seq := local_seq + 1;
+
+        effective_score := GREATEST(ROUND(base_score * active_product, 2), min_floor);
+        calc_score      := effective_score;
+
+        -- Determine decay type and apply multiplier
+        IF m = 0 THEN
+            dtype := 'FIRST_REPLY'; new_mult := 1.0;
+        ELSIF local_seq > 1 THEN
+            new_mult := 0.50; calc_score := GREATEST(ROUND(calc_score * 0.50, 2), min_floor); dtype := 'LOCAL_DECAY';
+        ELSE
+            new_mult := 0.90; calc_score := GREATEST(ROUND(calc_score * 0.90, 2), min_floor); dtype := 'GLOBAL_DECAY';
+        END IF;
+
+        penalty_mults   := array_append(penalty_mults,   new_mult);
+        penalty_times   := array_append(penalty_times,   rec.post_created_at);
+        penalty_authors := array_append(penalty_authors, rec.original_author_x_id);
+        ins_mults       := array_append(ins_mults,       new_mult);
+
+        -- Insert score for this new reply
+        INSERT INTO mindshare_score.global_contribution_scores_test (
+            reply_post_id, original_post_id, replier_x_id, original_author_x_id,
+            post_created_at, replier_base_score, effective_score, contribution_score,
+            active_multipliers, reply_number, local_reply_count, decay_type
+        ) VALUES (
+            rec.reply_post_id, rec.original_post_id, rec.replier_x_id, rec.original_author_x_id,
+            rec.post_created_at, rec.replier_base_score, effective_score, ROUND(calc_score, 2),
+            ins_mults, reply_seq, local_seq, dtype
+        );
+
+        v_count := v_count + 1;
+        IF p_log_every > 0 AND v_count % p_log_every = 0 THEN
+            PERFORM mindshare_score._decay_log(p_run_id,'global',NULL,'running','writing',
+                format('%s new global reply scores written...', v_count), v_count);
+        END IF;
+    END LOOP;
+    RETURN v_count;
+END;
+$func$;
+
+-- ============================================================================
 -- PHASE 6: INCREMENTAL ENTRY POINTS (WRITES TO _TEST TABLES)
 -- ============================================================================
 
@@ -873,59 +1048,33 @@ BEGIN
         CREATE INDEX ON tmp_changed (post_id);
         ANALYZE tmp_changed;
 
-        -- CASE 1: Users whose profile changed → need full history replay
-        DROP TABLE IF EXISTS tmp_dirty;
-        CREATE TEMP TABLE tmp_dirty (replier_x_id text PRIMARY KEY, t_min timestamptz) ON COMMIT DROP;
-
-        INSERT INTO tmp_dirty (replier_x_id, t_min)
-        SELECT p.user_x_id, min(p.post_created_at) AS t_min
-        FROM mindshare.mindshare_user u
-        JOIN mindshare.mindshare_post p
-          ON p.user_x_id = u.x_id
-         AND p.project_keyword = p_project_keyword
-         AND p.replied_post_id IS NOT NULL
-        WHERE GREATEST(u.created_at, u.updated_at) >  COALESCE(v_user_since, '-infinity'::timestamptz)
-          AND GREATEST(u.created_at, u.updated_at) <= v_user_new
-        GROUP BY p.user_x_id;
-
-        GET DIAGNOSTICS v_dirty = ROW_COUNT;
-
-        -- CASE 2: New replies (not from profile-changed users) → only insert new scores
+        -- OPTIMIZED: Only detect new replies, not profile changes
+        -- (Profile updates don't affect historical scores, only apply to new replies)
         DROP TABLE IF EXISTS tmp_new_replies;
         CREATE TEMP TABLE tmp_new_replies ON COMMIT DROP AS
         SELECT c.post_id, c.user_x_id, c.replied_post_id, c.post_created_at
         FROM tmp_changed c
-        WHERE c.replied_post_id IS NOT NULL
-          AND c.user_x_id NOT IN (SELECT replier_x_id FROM tmp_dirty)
-        UNION ALL
+        LEFT JOIN mindshare_score.contribution_scores_test cs
+          ON cs.project_keyword = p_project_keyword AND cs.reply_post_id = c.post_id
+        WHERE c.replied_post_id IS NOT NULL AND cs.reply_post_id IS NULL
+        UNION
         SELECT r.post_id, r.user_x_id, r.replied_post_id, r.post_created_at
         FROM tmp_changed c
         JOIN mindshare.mindshare_post r
           ON r.replied_post_id = c.post_id AND r.project_keyword = p_project_keyword
-        WHERE r.replied_post_id IS NOT NULL
-          AND r.user_x_id NOT IN (SELECT replier_x_id FROM tmp_dirty);
+        LEFT JOIN mindshare_score.contribution_scores_test cs
+          ON cs.project_keyword = p_project_keyword AND cs.reply_post_id = r.post_id
+        WHERE r.replied_post_id IS NOT NULL AND cs.reply_post_id IS NULL;
         CREATE INDEX ON tmp_new_replies (user_x_id, post_created_at);
         ANALYZE tmp_new_replies;
 
+        v_dirty := 0;  -- Not tracking profile changes, only reply changes
+
         PERFORM mindshare_score._decay_log(v_run_id,'project',p_project_keyword,'running','computing',
-            format('%s users with profile changes (full replay) + new replies from others - TEST TABLE', v_dirty), 0);
+            format('Processing new replies only (profile changes excluded) - TEST TABLE'), 0);
 
-        -- Process profile-changed users: full history replay
-        IF (SELECT COUNT(*) FROM tmp_dirty) > 0 THEN
-            DELETE FROM mindshare_score.contribution_scores_test cs
-            USING tmp_dirty d
-            WHERE cs.project_keyword = p_project_keyword
-              AND cs.replier_x_id = d.replier_x_id
-              AND cs.post_created_at >= d.t_min;
-
-            v_count := mindshare_score._decay_apply_project_tail_test(
-                           p_project_keyword, p_reset_interval, v_run_id, p_log_every);
-        ELSE
-            v_count := 0;
-        END IF;
-
-        -- Process new replies: directly calculate and insert (OPTIMIZED - no replay)
-        v_count := v_count + mindshare_score._decay_apply_project_new_replies_test(
+        -- Process new replies: directly calculate and insert (OPTIMIZED - no history replay)
+        v_count := mindshare_score._decay_apply_project_new_replies_test(
                        p_project_keyword, p_reset_interval, v_run_id, p_log_every);
     END IF;
 
@@ -1006,43 +1155,32 @@ BEGIN
         CREATE INDEX ON tmp_changed (post_id);
         ANALYZE tmp_changed;
 
-        DROP TABLE IF EXISTS tmp_dirty;
-        CREATE TEMP TABLE tmp_dirty (replier_x_id text PRIMARY KEY, t_min timestamptz) ON COMMIT DROP;
+        -- OPTIMIZED: Only detect new replies, not profile changes
+        -- (Profile updates don't affect historical scores, only apply to new replies)
+        DROP TABLE IF EXISTS tmp_new_replies;
+        CREATE TEMP TABLE tmp_new_replies ON COMMIT DROP AS
+        SELECT c.post_id, c.user_x_id, c.replied_post_id, c.post_created_at
+        FROM tmp_changed c
+        LEFT JOIN mindshare_score.global_contribution_scores_test cs
+          ON cs.reply_post_id = c.post_id
+        WHERE c.replied_post_id IS NOT NULL AND cs.reply_post_id IS NULL
+        UNION
+        SELECT r.post_id, r.user_x_id, r.replied_post_id, r.post_created_at
+        FROM tmp_changed c
+        JOIN mindshare.user_post r ON r.replied_post_id = c.post_id
+        LEFT JOIN mindshare_score.global_contribution_scores_test cs
+          ON cs.reply_post_id = r.post_id
+        WHERE r.replied_post_id IS NOT NULL AND cs.reply_post_id IS NULL;
+        CREATE INDEX ON tmp_new_replies (user_x_id, post_created_at);
+        ANALYZE tmp_new_replies;
 
-        INSERT INTO tmp_dirty (replier_x_id, t_min)
-        SELECT replier_x_id, min(t_min) AS t_min FROM (
-            SELECT c.user_x_id AS replier_x_id, c.post_created_at AS t_min
-            FROM tmp_changed c
-            WHERE c.replied_post_id IS NOT NULL
-            UNION ALL
-            SELECT r.user_x_id, r.post_created_at
-            FROM tmp_changed c
-            JOIN mindshare.user_post r ON r.replied_post_id = c.post_id
-            WHERE r.replied_post_id IS NOT NULL
-            UNION ALL
-            SELECT p.user_x_id, p.post_created_at
-            FROM mindshare.mindshare_user u
-            JOIN mindshare.user_post p
-              ON p.user_x_id = u.x_id AND p.replied_post_id IS NOT NULL
-            WHERE GREATEST(u.created_at, u.updated_at) >  COALESCE(v_user_since, '-infinity'::timestamptz)
-              AND GREATEST(u.created_at, u.updated_at) <= v_user_new
-        ) d
-        GROUP BY replier_x_id;
+        v_dirty := 0;  -- Not tracking profile changes, only reply changes
 
-        GET DIAGNOSTICS v_dirty = ROW_COUNT;
-        ANALYZE tmp_dirty;
+        PERFORM mindshare_score._decay_log(v_run_id,'global',NULL,'running','computing',
+            format('Processing new replies only (profile changes excluded) - TEST TABLE'), 0);
 
-        PERFORM mindshare_score._decay_log(v_run_id,'global:TEST',NULL,'running','computing',
-            format('%s dirty repliers to recompute (tail-from-t_min) - TEST TABLE', v_dirty), 0);
-
-        IF v_dirty > 0 THEN
-            DELETE FROM mindshare_score.global_contribution_scores_test cs
-            USING tmp_dirty d
-            WHERE cs.replier_x_id = d.replier_x_id
-              AND cs.post_created_at >= d.t_min;
-
-            v_count := mindshare_score._decay_apply_global_tail_test(p_reset_interval, v_run_id, p_log_every);
-        END IF;
+        -- Process new replies: directly calculate and insert (OPTIMIZED - no history replay)
+        v_count := mindshare_score._decay_apply_global_new_replies_test(p_reset_interval, v_run_id, p_log_every);
     END IF;
 
     INSERT INTO mindshare_score.decay_run_state (scope, last_ingest_ts, last_user_ingest_ts, last_run_at, last_run_id, dirty_repliers, rows_written)

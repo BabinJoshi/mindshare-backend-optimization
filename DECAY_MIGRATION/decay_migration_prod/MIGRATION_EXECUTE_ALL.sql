@@ -306,6 +306,10 @@ BEGIN
         penalty_authors := array_append(penalty_authors, rec.original_author_x_id);
 
         -- WRITE TO _test TABLE
+        -- ON CONFLICT DO NOTHING is a last-resort safety net: DISTINCT ON in the
+        -- source query above already removes duplicate post_ids, so this should
+        -- never fire in normal operation. If it ever does, the row is silently
+        -- skipped rather than crashing the whole run.
         INSERT INTO mindshare_score.contribution_scores (
             project_keyword, reply_post_id, original_post_id, replier_x_id, original_author_x_id,
             post_created_at, replier_base_score, effective_score, contribution_score,
@@ -314,7 +318,8 @@ BEGIN
             rec.project_keyword, rec.post_id, rec.original_post_id, rec.replier_x_id, rec.original_author_x_id,
             rec.post_created_at, rec.replier_base_score, effective_score, ROUND(calc_score, 2),
             penalty_mults, reply_seq, local_seq, dtype
-        );
+        )
+        ON CONFLICT (project_keyword, reply_post_id) DO NOTHING;
 
         v_count := v_count + 1;
         IF p_log_every > 0 AND v_count % p_log_every = 0 THEN
@@ -432,6 +437,10 @@ BEGIN
         penalty_authors := array_append(penalty_authors, rec.original_author_x_id);
 
         -- WRITE TO _test TABLE
+        -- ON CONFLICT DO NOTHING is a last-resort safety net: DISTINCT ON in the
+        -- source query above already removes duplicate post_ids, so this should
+        -- never fire in normal operation. If it ever does, the row is silently
+        -- skipped rather than crashing the whole run.
         INSERT INTO mindshare_score.global_contribution_scores (
             reply_post_id, original_post_id, replier_x_id, original_author_x_id,
             post_created_at, replier_base_score, effective_score, contribution_score,
@@ -440,7 +449,8 @@ BEGIN
             rec.reply_post_id, rec.original_post_id, rec.replier_x_id, rec.original_author_x_id,
             rec.post_created_at, rec.replier_base_score, effective_score, ROUND(calc_score, 2),
             penalty_mults, reply_seq, local_seq, dtype
-        );
+        )
+        ON CONFLICT (reply_post_id) DO NOTHING;
 
         v_count := v_count + 1;
         IF p_log_every > 0 AND v_count % p_log_every = 0 THEN
@@ -558,7 +568,8 @@ BEGIN
             rec.project_keyword, rec.post_id, rec.original_post_id, rec.replier_x_id, rec.original_author_x_id,
             rec.post_created_at, rec.replier_base_score, effective_score, ROUND(calc_score,2),
             penalty_mults, reply_seq, local_seq, dtype
-        );
+        )
+        ON CONFLICT (project_keyword, reply_post_id) DO NOTHING;
 
         v_count := v_count + 1;
         IF p_log_every > 0 AND v_count % p_log_every = 0 THEN
@@ -707,6 +718,11 @@ BEGIN
         ins_mults       := array_append(ins_mults,       new_mult);
 
         -- Insert score for this new reply
+        -- ON CONFLICT DO NOTHING is a last-resort safety net: DISTINCT ON in
+        -- tmp_new_replies already removes duplicate post_ids, and the anti-join
+        -- there already excludes replies that already have a score, so this
+        -- should never fire in normal operation. If it ever does, the row is
+        -- silently skipped rather than crashing the whole run.
         INSERT INTO mindshare_score.contribution_scores (
             project_keyword, reply_post_id, original_post_id, replier_x_id, original_author_x_id,
             post_created_at, replier_base_score, effective_score, contribution_score,
@@ -715,7 +731,8 @@ BEGIN
             rec.project_keyword, rec.post_id, rec.original_post_id, rec.replier_x_id, rec.original_author_x_id,
             rec.post_created_at, rec.replier_base_score, effective_score, ROUND(calc_score, 2),
             ins_mults, reply_seq, local_seq, dtype
-        );
+        )
+        ON CONFLICT (project_keyword, reply_post_id) DO NOTHING;
 
         v_count := v_count + 1;
         IF p_log_every > 0 AND v_count % p_log_every = 0 THEN
@@ -825,7 +842,8 @@ BEGIN
             rec.reply_post_id, rec.original_post_id, rec.replier_x_id, rec.original_author_x_id,
             rec.post_created_at, rec.replier_base_score, effective_score, ROUND(calc_score,2),
             penalty_mults, reply_seq, local_seq, dtype
-        );
+        )
+        ON CONFLICT (reply_post_id) DO NOTHING;
 
         v_count := v_count + 1;
         IF p_log_every > 0 AND v_count % p_log_every = 0 THEN
@@ -972,6 +990,11 @@ BEGIN
         ins_mults       := array_append(ins_mults,       new_mult);
 
         -- Insert score for this new reply
+        -- ON CONFLICT DO NOTHING is a last-resort safety net: DISTINCT ON in
+        -- tmp_new_replies already removes duplicate post_ids, and the anti-join
+        -- there already excludes replies that already have a score, so this
+        -- should never fire in normal operation. If it ever does, the row is
+        -- silently skipped rather than crashing the whole run.
         INSERT INTO mindshare_score.global_contribution_scores (
             reply_post_id, original_post_id, replier_x_id, original_author_x_id,
             post_created_at, replier_base_score, effective_score, contribution_score,
@@ -980,7 +1003,8 @@ BEGIN
             rec.reply_post_id, rec.original_post_id, rec.replier_x_id, rec.original_author_x_id,
             rec.post_created_at, rec.replier_base_score, effective_score, ROUND(calc_score, 2),
             ins_mults, reply_seq, local_seq, dtype
-        );
+        )
+        ON CONFLICT (reply_post_id) DO NOTHING;
 
         v_count := v_count + 1;
         IF p_log_every > 0 AND v_count % p_log_every = 0 THEN
